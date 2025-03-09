@@ -14,8 +14,8 @@ A **Vue.js** application that enables users to edit rendered **HTML** and **plai
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/ezekielted/lmth-2-way-html-editor.git
-cd your-repo
+git clone https://github.com/ezekielted/lmth-editor.git
+cd lmth-editor
 yarn install
 ```
 
