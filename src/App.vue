@@ -1,4 +1,4 @@
-[v0-no-op-code-block-prefix]<template>
+<template>
   <div class="html-editor" :class="{ 'dark': isDarkMode }">
     <div class="app-header">
       <div class="app-title-container">
@@ -938,6 +938,7 @@ onMounted(() => {
   --h-bg-color: #000000;
   --h-text-color: #ffffff;
   --highlight-bg: #fde68a; /* Dull amber yellow */
+  --ruled-line-color: #d1d5db; /* Slightly darker for light mode */
 
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   
@@ -985,6 +986,7 @@ onMounted(() => {
   --h-bg-color: #ffffff;
   --h-text-color: #000000;
   --highlight-bg: #fBBF2480; /* Amber with opacity */
+  --ruled-line-color: #475569; /* Lighter for dark mode */
 }
 
 /* App header - Improved for better responsiveness */
@@ -1294,6 +1296,17 @@ onMounted(() => {
   z-index: 1;
   overflow: hidden; /* Scrolling is controlled by the textarea */
   text-align: left;
+  
+  /* --- Ruled Paper Texture --- */
+  background-image: repeating-linear-gradient(
+    transparent 0,
+    transparent calc(1.5em - 1px),
+    var(--ruled-line-color) calc(1.5em - 1px),
+    var(--ruled-line-color) 1.5em
+  );
+  background-size: 100% 1.5em;
+  background-attachment: local; /* Make background scroll with content */
+  background-position-y: 15px;  /* Align with top padding */
 }
 
 .code-highlighter :deep(.highlight) {
