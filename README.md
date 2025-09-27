@@ -24,7 +24,7 @@ yarn install
 Preview in local host:
 
 ```bash
-yarn serv
+yarn serve
 ```
 
 ## 📦 Dependencies
