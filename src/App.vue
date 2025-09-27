@@ -812,37 +812,21 @@ const escapeHtml = (str) => {
 };
 
 /**
- * Finds the start and end positions of the Nth occurrence of a tag in an HTML string.
- * @param {string} content The HTML content string.
- * @param {string} tagName The tag name to search for (e.g., 'P', 'IMG').
- * @param {number} index The zero-based index of the tag to find.
- * @returns {{start: number, end: number, text: string}|null}
+ * Finds the starting position of the Nth occurrence of a substring.
+ * @param {string} string The string to search in.
+ * @param {string} substring The substring to search for.
+ * @param {number} n The zero-based index of the occurrence to find.
+ * @returns {number} The starting index, or -1 if not found.
  */
-const findNthMatchPosition = (content, tagName, index) => {
-  const selfClosingTags = ['IMG', 'BR', 'HR', 'INPUT', 'LINK', 'META'];
-  const isSelfClosing = selfClosingTags.includes(tagName.toUpperCase());
-  
-  // Use 'g' flag for stateful exec() loop and 's' for dotall to match newlines.
-  const regex = isSelfClosing
-    ? new RegExp(`<${tagName}[^>]*?>`, 'gi')
-    : new RegExp(`<${tagName}[^>]*>.*?<\\/${tagName}>`, 'gis');
-
-  let match;
-  let matchCount = 0;
-  // Loop through all matches using regex.exec()
-  while ((match = regex.exec(content)) !== null) {
-    if (matchCount === index) {
-      // Found the desired match, return its position and text.
-      return {
-        start: match.index,
-        end: regex.lastIndex,
-        text: match[0],
-      };
+const findNthOccurrence = (string, substring, n) => {
+  let index = -1;
+  for (let i = 0; i <= n; i++) {
+    index = string.indexOf(substring, index + 1);
+    if (index === -1) {
+      return -1; // Nth occurrence not found
     }
-    matchCount += 1;
   }
-  
-  return null; // Return null if the Nth match was not found.
+  return index;
 };
 
 const updateHighlighterContent = (content, highlightInfo = null) => {
@@ -852,28 +836,58 @@ const updateHighlighterContent = (content, highlightInfo = null) => {
     highlighterRef.value.innerHTML = escapeHtml(content);
     return;
   }
-  
-  const { tagName, index } = highlightInfo;
-  const matchInfo = findNthMatchPosition(content, tagName, index);
 
-  if (matchInfo) {
-    // Slice the content into three parts: before, the match, and after.
-    const before = content.substring(0, matchInfo.start);
-    const highlight = matchInfo.text;
-    const after = content.substring(matchInfo.end);
+  let startPos = -1;
+  let endPos = -1;
+
+  // NEW: Logic for IMG tags using their overall index in the document
+  if (highlightInfo.tag === 'IMG') {
+    const { index } = highlightInfo;
+    let searchFrom = -1;
+    // Find the starting position of the nth '<img' tag
+    for (let i = 0; i <= index; i++) {
+      // Case-insensitive search
+      searchFrom = content.toLowerCase().indexOf('<img', searchFrom + 1);
+      if (searchFrom === -1) {
+        break; // Nth image tag not found in the string
+      }
+    }
+
+    if (searchFrom !== -1) {
+      startPos = searchFrom;
+      // Find the closing '>' of that specific tag
+      const tagEnd = content.indexOf('>', startPos);
+      if (tagEnd !== -1) {
+        endPos = tagEnd + 1; // Include the '>' in the highlight
+      }
+    }
+  } else { // ORIGINAL LOGIC for all other tags based on outerHTML
+    const { elementHTML, index } = highlightInfo;
+    startPos = findNthOccurrence(content, elementHTML, index);
+    if (startPos !== -1) {
+      endPos = startPos + elementHTML.length;
+    }
+  }
+
+  // Common rendering logic if a valid position was found
+  if (startPos !== -1 && endPos !== -1) {
+    const before = content.substring(0, startPos);
+    const highlight = content.substring(startPos, endPos);
+    const after = content.substring(endPos);
 
     // Escape each part individually and reconstruct with the <mark> tag.
-    const finalContent = 
+    const finalContent =
       escapeHtml(before) +
       `<mark class="highlight" id="highlight-target">${escapeHtml(highlight)}</mark>` +
       escapeHtml(after);
-    
+
     highlighterRef.value.innerHTML = finalContent;
   } else {
-    // If no match was found (e.g., due to desync), show un-highlighted content.
+    // Fallback if no match was found (e.g., due to DOM/string desync)
     highlighterRef.value.innerHTML = escapeHtml(content);
   }
 };
+
 
 watch(currentHtml, (newHtml) => {
   updateHighlighterContent(newHtml);
@@ -905,39 +919,90 @@ const handleVisualEditorHover = (event) => {
       clearHighlight();
       return;
     }
-    
+
     const tagName = target.tagName;
+
     if (!tagName) {
       clearHighlight();
       return;
     }
 
-    const allElementsOfType = editorRef.value.querySelectorAll(tagName);
-    const elementsArray = Array.from(allElementsOfType);
-    const hoveredElementIndex = elementsArray.indexOf(target);
+    try {
+      let highlightInfo = null;
 
-    if (hoveredElementIndex > -1) {
-      // Pass the structural info (tag and index) to the highlighter.
-      updateHighlighterContent(currentHtml.value, { tagName, index: hoveredElementIndex });
+      // NEW: Special case for image tags to use nth-of-type logic
+      if (tagName === 'IMG') {
+        // Find all rendered image elements
+        const allImages = Array.from(editorRef.value.querySelectorAll('img'));
+        // Find the specific index of the hovered image
+        const imageIndex = allImages.indexOf(target);
 
-      nextTick(() => {
-        const highlightEl = highlighterRef.value.querySelector('#highlight-target');
-        if (highlightEl) {
-          highlightEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-          
-          setTimeout(() => {
-            if (htmlOutputRef.value) {
-              htmlOutputRef.value.scrollTop = highlighterRef.value.scrollTop;
-              htmlOutputRef.value.scrollLeft = highlighterRef.value.scrollLeft;
-            }
-          }, 400); 
+        if (imageIndex > -1) {
+          // Create highlight info based on the tag and its index
+          highlightInfo = {
+            tag: 'IMG',
+            index: imageIndex
+          };
         }
-      });
-    } else {
+      } else { // ORIGINAL: Logic for all other tags
+        const targetOuterHTML = target.outerHTML;
+        // Find all elements of the same tag type in the editor
+        const allElementsOfSameType = editorRef.value.querySelectorAll(tagName);
+        // Filter to get only elements with the exact same outerHTML as our target
+        const identicalElements = Array.from(allElementsOfSameType).filter(el => el.outerHTML === targetOuterHTML);
+        // Find the index of our specific hovered element among its identical peers
+        const hoverIndex = identicalElements.indexOf(target);
+
+        if (hoverIndex > -1) {
+          // Pass the unique element HTML and its specific index to the highlighter
+          highlightInfo = {
+            elementHTML: targetOuterHTML,
+            index: hoverIndex
+          };
+        }
+      }
+
+      if (highlightInfo) {
+        updateHighlighterContent(currentHtml.value, highlightInfo);
+
+        nextTick(() => {
+          const highlightEl = highlighterRef.value.querySelector('#highlight-target');
+          if (highlightEl && highlighterRef.value && htmlOutputRef.value) {
+            const codePanel = htmlOutputRef.value;
+            const scrollDistance = Math.abs(highlightEl.offsetTop - codePanel.scrollTop);
+            const scrollThreshold = codePanel.clientHeight * 2;
+            const behavior = scrollDistance > scrollThreshold ? 'instant' : 'smooth';
+
+            highlightEl.scrollIntoView({
+              behavior,
+              block: 'center',
+              inline: 'nearest'
+            });
+
+            const syncScrollAction = () => {
+              if (htmlOutputRef.value) {
+                htmlOutputRef.value.scrollTop = highlighterRef.value.scrollTop;
+                htmlOutputRef.value.scrollLeft = highlighterRef.value.scrollLeft;
+              }
+            };
+
+            if (behavior === 'instant') {
+              syncScrollAction();
+            } else {
+              setTimeout(syncScrollAction, 400);
+            }
+          }
+        });
+      } else {
+        clearHighlight();
+      }
+    } catch (error) {
+      console.error('Error during hover handling:', error);
       clearHighlight();
     }
   }, 50);
 };
+
 
 const clearHighlight = () => {
   clearTimeout(highlightDebounceTimer);
