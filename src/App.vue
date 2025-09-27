@@ -1,4 +1,3 @@
-```vue type="vue" project="HTML Editor" file="app.vue"
 [v0-no-op-code-block-prefix]<template>
   <div class="html-editor" :class="{ 'dark': isDarkMode }">
     <div class="app-header">
@@ -73,6 +72,8 @@
             @focus="handleEditorFocus"
             @blur="handleEditorBlur"
             @mousedown="handleEditorMouseDown"
+            @mouseover="handleVisualEditorHover"
+            @mouseleave="clearHighlight"
           ></div>
           
           <!-- Floating Image Bubble -->
@@ -133,20 +134,25 @@
         <div class="panel-header">
           <h2 class="panel-title">HTML Code</h2>
         </div>
-        <textarea 
-          ref="htmlOutputRef" 
-          v-model="currentHtml"
-          @input="handleHtmlOutputInput"
-          @focus="handleHtmlCodeFocus"
-          class="html-output"
-        ></textarea>
+        <div class="code-editor-container">
+          <pre ref="highlighterRef" class="code-highlighter" aria-hidden="true"></pre>
+          <textarea
+            ref="htmlOutputRef"
+            v-model="currentHtml"
+            @input="handleHtmlOutputInput"
+            @focus="handleHtmlCodeFocus"
+            @scroll="syncScroll"
+            class="html-output-textarea"
+            spellcheck="false"
+          ></textarea>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue';
+import { ref, onMounted, nextTick, watch } from 'vue';
 import { 
   ImageIcon, 
   SaveIcon, 
@@ -160,7 +166,8 @@ import {
 
 const editorRef = ref(null);
 const htmlOutputRef = ref(null);
-const currentHtml = ref('<p>Click to edit this text.</p>');
+const highlighterRef = ref(null);
+const currentHtml = ref('<p>Hover over this text to see the magic!</p><h1>Or this heading...</h1>');
 const isDarkMode = ref(false);
 
 // Undo/Redo history
@@ -191,6 +198,11 @@ const isEditorActive = ref(false);
 const isHtmlCodeActive = ref(false);
 const lastActiveElement = ref(null);
 
+// Highlighting and sync scroll
+const isVisualEditorScrolling = ref(false);
+let visualScrollTimeout = null;
+let highlightDebounceTimer = null;
+
 // Toggle dark mode
 const toggleDarkMode = () => {
   isDarkMode.value = !isDarkMode.value;
@@ -205,12 +217,16 @@ const toggleDarkMode = () => {
 // Update HTML code section styles based on dark mode
 const updateHtmlCodeStyles = () => {
     if (htmlOutputRef.value) {
-      if (isDarkMode.value) {
-        htmlOutputRef.value.style.backgroundColor = '#1e293b';
-        htmlOutputRef.value.style.color = '#f1f5f9';
-      } else {
-        htmlOutputRef.value.style.backgroundColor = 'white';
-        htmlOutputRef.value.style.color = '#1e293b';
+      const textColor = isDarkMode.value ? '#f1f5f9' : '#1e293b';
+      const bgColor = isDarkMode.value ? '#1e293b' : 'white';
+      
+      // Update textarea caret color
+      htmlOutputRef.value.style.caretColor = textColor;
+      
+      // Update highlighter colors
+      if (highlighterRef.value) {
+        highlighterRef.value.style.backgroundColor = bgColor;
+        highlighterRef.value.style.color = textColor;
       }
     }
     
@@ -788,6 +804,92 @@ const saveHtmlAs = () => {
   URL.revokeObjectURL(url);
 };
 
+// ---- Highlighting and Sync Scroll Logic ----
+
+const escapeHtml = (str) => {
+  if (typeof str !== 'string') return '';
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+};
+
+const updateHighlighterContent = (content, highlight = null) => {
+  if (!highlighterRef.value) return;
+
+  let finalContent = escapeHtml(content);
+
+  if (highlight) {
+    const escapedSearchText = escapeHtml(highlight);
+    finalContent = finalContent.replace(escapedSearchText, `<mark class="highlight" id="highlight-target">${escapedSearchText}</mark>`);
+  }
+  
+  highlighterRef.value.innerHTML = finalContent;
+};
+
+watch(currentHtml, (newHtml) => {
+  // Sync highlighter content when html changes from typing, undo, redo etc.
+  updateHighlighterContent(newHtml);
+  // Also sync scroll position.
+  if (htmlOutputRef.value && highlighterRef.value) {
+      highlighterRef.value.scrollTop = htmlOutputRef.value.scrollTop;
+      highlighterRef.value.scrollLeft = htmlOutputRef.value.scrollLeft;
+  }
+});
+
+const handleVisualEditorScroll = () => {
+  isVisualEditorScrolling.value = true;
+  clearTimeout(visualScrollTimeout);
+  visualScrollTimeout = setTimeout(() => {
+    isVisualEditorScrolling.value = false;
+  }, 150); // User hasn't scrolled for 150ms
+};
+
+const handleVisualEditorHover = (event) => {
+  if (isVisualEditorScrolling.value) return;
+
+  clearTimeout(highlightDebounceTimer);
+  highlightDebounceTimer = setTimeout(() => {
+    const target = event.target;
+    if (!target || !editorRef.value.contains(target) || target === editorRef.value) {
+      return;
+    }
+    
+    const searchText = target.outerHTML;
+    
+    if (currentHtml.value.includes(searchText)) {
+        updateHighlighterContent(currentHtml.value, searchText);
+
+        nextTick(() => {
+            const highlightEl = highlighterRef.value.querySelector('#highlight-target');
+            if (highlightEl) {
+                highlightEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+                
+                // Sync the textarea scroll after the smooth scroll animation
+                setTimeout(() => {
+                    if (htmlOutputRef.value) {
+                        htmlOutputRef.value.scrollTop = highlighterRef.value.scrollTop;
+                        htmlOutputRef.value.scrollLeft = highlighterRef.value.scrollLeft;
+                    }
+                }, 400); 
+            }
+        });
+    }
+
+  }, 50); // Small debounce to prevent flickering
+};
+
+const clearHighlight = () => {
+  clearTimeout(highlightDebounceTimer);
+  updateHighlighterContent(currentHtml.value);
+};
+
+// Syncs scroll from user scrolling the textarea
+const syncScroll = (event) => {
+  if (highlighterRef.value) {
+    highlighterRef.value.scrollTop = event.target.scrollTop;
+    highlighterRef.value.scrollLeft = event.target.scrollLeft;
+  }
+};
+
+
 // Initialize the editor
 onMounted(() => {
   // Check for saved dark mode preference
@@ -804,6 +906,14 @@ onMounted(() => {
     editorRef.value.innerHTML = currentHtml.value;
     addToHistory(currentHtml.value);
   }
+
+  // Setup visual editor scroll listener
+  if (editorRef.value && editorRef.value.parentElement) {
+    editorRef.value.parentElement.addEventListener('scroll', handleVisualEditorScroll);
+  }
+
+  // Initial highlighter content
+  updateHighlighterContent(currentHtml.value);
 });
 </script>
 
@@ -827,6 +937,7 @@ onMounted(() => {
   --bracket-color: var(--text-color);
   --h-bg-color: #000000;
   --h-text-color: #ffffff;
+  --highlight-bg: #fde68a; /* Dull amber yellow */
 
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   
@@ -873,6 +984,7 @@ onMounted(() => {
   --bracket-color: var(--text-color);
   --h-bg-color: #ffffff;
   --h-text-color: #000000;
+  --highlight-bg: #fBBF2480; /* Amber with opacity */
 }
 
 /* App header - Improved for better responsiveness */
@@ -1073,6 +1185,7 @@ onMounted(() => {
   background-color: var(--primary-color);
   color: white;
   padding: 10px 15px;
+  flex-shrink: 0;
 }
 
 .panel-title {
@@ -1095,18 +1208,18 @@ onMounted(() => {
 
 /* Custom scrollbar styles */
 .editor-container::-webkit-scrollbar,
-.html-output::-webkit-scrollbar {
+.html-output-textarea::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
 .editor-container::-webkit-scrollbar-track,
-.html-output::-webkit-scrollbar-track {
+.html-output-textarea::-webkit-scrollbar-track {
   background: var(--scrollbar-bg);
 }
 
 .editor-container::-webkit-scrollbar-thumb,
-.html-output::-webkit-scrollbar-thumb {
+.html-output-textarea::-webkit-scrollbar-thumb {
   background-color: var(--scrollbar-thumb);
   border-radius: 5px;
   border: 2px solid var(--scrollbar-bg);
@@ -1140,26 +1253,54 @@ onMounted(() => {
   text-decoration: underline;
 }
 
-/* HTML Output - modify to use full height of panel */
-.html-output {
-  white-space: pre-wrap;
-  word-break: break-all;
+/* NEW: Code Editor container */
+.code-editor-container {
+  position: relative;
+  flex-grow: 1;
+  border-radius: 0 0 8px 8px;
+  overflow: hidden;
+}
+
+.code-highlighter,
+.html-output-textarea {
   font-family: 'Fira Code', monospace;
   font-size: 14px;
+  line-height: 1.5;
   padding: 15px;
   margin: 0;
-  outline: none;
-  border: none;
-  border-radius: 0 0 8px 8px;
-  flex-grow: 1;
-  overflow: auto;
-  text-align: left; /* Ensure HTML code is left-aligned */
-  resize: none; /* Prevent textarea resizing */
+  white-space: pre-wrap;
+  word-break: break-all;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   box-sizing: border-box;
-  /* Background and text color will be set dynamically in JS */
+  border: none;
+  outline: none;
 }
+
+.html-output-textarea {
+  background-color: transparent;
+  color: transparent; /* Text is invisible, we see the highlighter's text */
+  caret-color: var(--text-color); /* But the caret is visible */
+  resize: none;
+  overflow: auto; /* This is the element that actually scrolls */
+  z-index: 2;
+}
+
+.code-highlighter {
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden; /* Scrolling is controlled by the textarea */
+  text-align: left;
+}
+
+.code-highlighter :deep(.highlight) {
+  background-color: var(--highlight-bg);
+  border-radius: 3px;
+}
+
 
 /* Image bubble */
 .image-bubble {

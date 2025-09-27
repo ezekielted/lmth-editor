@@ -21,22 +21,10 @@ yarn install
 
 ## 🚀 Usage
 
-Start the development server:
+Preview in local host:
 
 ```bash
-yarn dev
-```
-
-Build for production:
-
-```bash
-yarn build
-```
-
-Preview the production build:
-
-```bash
-yarn preview
+yarn serv
 ```
 
 ## 📦 Dependencies
