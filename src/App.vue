@@ -167,7 +167,7 @@ import {
 const editorRef = ref(null);
 const htmlOutputRef = ref(null);
 const highlighterRef = ref(null);
-const currentHtml = ref('<p>Hover over this text to see the magic!</p><h1>Or this heading...</h1>');
+const currentHtml = ref('<p>Hover over this text to see the magic!</p><h1>Or this heading...</h1><p>Now, try hovering over the image below!</p><img src="https://via.placeholder.com/400x150.png?text=Hover+Me!" alt="Placeholder Image">');
 const isDarkMode = ref(false);
 
 // Undo/Redo history
@@ -811,23 +811,72 @@ const escapeHtml = (str) => {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 };
 
-const updateHighlighterContent = (content, highlight = null) => {
-  if (!highlighterRef.value) return;
+/**
+ * Finds the start and end positions of the Nth occurrence of a tag in an HTML string.
+ * @param {string} content The HTML content string.
+ * @param {string} tagName The tag name to search for (e.g., 'P', 'IMG').
+ * @param {number} index The zero-based index of the tag to find.
+ * @returns {{start: number, end: number, text: string}|null}
+ */
+const findNthMatchPosition = (content, tagName, index) => {
+  const selfClosingTags = ['IMG', 'BR', 'HR', 'INPUT', 'LINK', 'META'];
+  const isSelfClosing = selfClosingTags.includes(tagName.toUpperCase());
+  
+  // Use 'g' flag for stateful exec() loop and 's' for dotall to match newlines.
+  const regex = isSelfClosing
+    ? new RegExp(`<${tagName}[^>]*?>`, 'gi')
+    : new RegExp(`<${tagName}[^>]*>.*?<\\/${tagName}>`, 'gis');
 
-  let finalContent = escapeHtml(content);
-
-  if (highlight) {
-    const escapedSearchText = escapeHtml(highlight);
-    finalContent = finalContent.replace(escapedSearchText, `<mark class="highlight" id="highlight-target">${escapedSearchText}</mark>`);
+  let match;
+  let matchCount = 0;
+  // Loop through all matches using regex.exec()
+  while ((match = regex.exec(content)) !== null) {
+    if (matchCount === index) {
+      // Found the desired match, return its position and text.
+      return {
+        start: match.index,
+        end: regex.lastIndex,
+        text: match[0],
+      };
+    }
+    matchCount += 1;
   }
   
-  highlighterRef.value.innerHTML = finalContent;
+  return null; // Return null if the Nth match was not found.
+};
+
+const updateHighlighterContent = (content, highlightInfo = null) => {
+  if (!highlighterRef.value) return;
+
+  if (!highlightInfo) {
+    highlighterRef.value.innerHTML = escapeHtml(content);
+    return;
+  }
+  
+  const { tagName, index } = highlightInfo;
+  const matchInfo = findNthMatchPosition(content, tagName, index);
+
+  if (matchInfo) {
+    // Slice the content into three parts: before, the match, and after.
+    const before = content.substring(0, matchInfo.start);
+    const highlight = matchInfo.text;
+    const after = content.substring(matchInfo.end);
+
+    // Escape each part individually and reconstruct with the <mark> tag.
+    const finalContent = 
+      escapeHtml(before) +
+      `<mark class="highlight" id="highlight-target">${escapeHtml(highlight)}</mark>` +
+      escapeHtml(after);
+    
+    highlighterRef.value.innerHTML = finalContent;
+  } else {
+    // If no match was found (e.g., due to desync), show un-highlighted content.
+    highlighterRef.value.innerHTML = escapeHtml(content);
+  }
 };
 
 watch(currentHtml, (newHtml) => {
-  // Sync highlighter content when html changes from typing, undo, redo etc.
   updateHighlighterContent(newHtml);
-  // Also sync scroll position.
   if (htmlOutputRef.value && highlighterRef.value) {
       highlighterRef.value.scrollTop = htmlOutputRef.value.scrollTop;
       highlighterRef.value.scrollLeft = htmlOutputRef.value.scrollLeft;
@@ -839,7 +888,7 @@ const handleVisualEditorScroll = () => {
   clearTimeout(visualScrollTimeout);
   visualScrollTimeout = setTimeout(() => {
     isVisualEditorScrolling.value = false;
-  }, 150); // User hasn't scrolled for 150ms
+  }, 150);
 };
 
 const handleVisualEditorHover = (event) => {
@@ -847,33 +896,47 @@ const handleVisualEditorHover = (event) => {
 
   clearTimeout(highlightDebounceTimer);
   highlightDebounceTimer = setTimeout(() => {
-    const target = event.target;
+    let target = event.target;
+    if (target.nodeType === 3) { // If it's a text node, get its parent element.
+      target = target.parentElement;
+    }
+
     if (!target || !editorRef.value.contains(target) || target === editorRef.value) {
+      clearHighlight();
       return;
     }
     
-    const searchText = target.outerHTML;
-    
-    if (currentHtml.value.includes(searchText)) {
-        updateHighlighterContent(currentHtml.value, searchText);
-
-        nextTick(() => {
-            const highlightEl = highlighterRef.value.querySelector('#highlight-target');
-            if (highlightEl) {
-                highlightEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-                
-                // Sync the textarea scroll after the smooth scroll animation
-                setTimeout(() => {
-                    if (htmlOutputRef.value) {
-                        htmlOutputRef.value.scrollTop = highlighterRef.value.scrollTop;
-                        htmlOutputRef.value.scrollLeft = highlighterRef.value.scrollLeft;
-                    }
-                }, 400); 
-            }
-        });
+    const tagName = target.tagName;
+    if (!tagName) {
+      clearHighlight();
+      return;
     }
 
-  }, 50); // Small debounce to prevent flickering
+    const allElementsOfType = editorRef.value.querySelectorAll(tagName);
+    const elementsArray = Array.from(allElementsOfType);
+    const hoveredElementIndex = elementsArray.indexOf(target);
+
+    if (hoveredElementIndex > -1) {
+      // Pass the structural info (tag and index) to the highlighter.
+      updateHighlighterContent(currentHtml.value, { tagName, index: hoveredElementIndex });
+
+      nextTick(() => {
+        const highlightEl = highlighterRef.value.querySelector('#highlight-target');
+        if (highlightEl) {
+          highlightEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+          
+          setTimeout(() => {
+            if (htmlOutputRef.value) {
+              htmlOutputRef.value.scrollTop = highlighterRef.value.scrollTop;
+              htmlOutputRef.value.scrollLeft = highlighterRef.value.scrollLeft;
+            }
+          }, 400); 
+        }
+      });
+    } else {
+      clearHighlight();
+    }
+  }, 50);
 };
 
 const clearHighlight = () => {
