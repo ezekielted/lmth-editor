@@ -79,8 +79,8 @@
             @focus="handleEditorFocus"
             @blur="handleEditorBlur"
             @mousedown="handleEditorMouseDown"
-            @mouseover="handleVisualEditorHover"
-            @mouseleave="clearHighlight"
+            @mousemove="handleVisualEditorHover"
+            @mouseleave="clearHighlightAndMagnifier"
             @contextmenu.prevent="handleImageRightClick"
           ></div>
           
@@ -156,6 +156,10 @@
           <h2 class="panel-title">HTML Code</h2>
         </div>
         <div class="code-editor-container">
+          <!-- NEW: Magnifying lens -->
+          <div v-if="showMagnifier" class="magnifier" :style="magnifierStyle">
+            <pre class="magnified-content" v-text="magnifiedContent"></pre>
+          </div>
           <pre ref="highlighterRef" class="code-highlighter" aria-hidden="true"></pre>
           <textarea
             ref="htmlOutputRef"
@@ -231,7 +235,12 @@ const lastActiveElement = ref(null);
 // Highlighting and sync scroll
 const isVisualEditorScrolling = ref(false);
 let visualScrollTimeout = null;
-let highlightDebounceTimer = null;
+let isHoverThrottled = false; // OPTIMIZATION: Throttling flag for hover events
+
+// NEW: Magnifier state
+const showMagnifier = ref(false);
+const magnifierStyle = ref({});
+const magnifiedContent = ref('');
 
 // --- Resizing panels ---
 const mainContentRef = ref(null);
@@ -1031,60 +1040,46 @@ const handleVisualEditorScroll = () => {
   }, 150);
 };
 
+/**
+ * --- OPTIMIZED ---
+ * This function now uses requestAnimationFrame to throttle execution, ensuring smooth
+ * performance by syncing with the browser's render cycle. It also corrects the
+ * magnifier's position by relying on CSS transforms for centering.
+ */
 const handleVisualEditorHover = (event) => {
-  if (isVisualEditorScrolling.value) return;
+  if (isVisualEditorScrolling.value || isHoverThrottled) return;
 
-  clearTimeout(highlightDebounceTimer);
-  highlightDebounceTimer = setTimeout(() => {
-    let target = event.target;
-    if (target.nodeType === 3) { // If it's a text node, get its parent element.
-      target = target.parentElement;
-    }
-
-    if (!target || !editorRef.value.contains(target) || target === editorRef.value) {
-      clearHighlight();
-      return;
-    }
-
-    const tagName = target.tagName;
-
-    if (!tagName) {
-      clearHighlight();
-      return;
-    }
-
+  isHoverThrottled = true;
+  requestAnimationFrame(() => {
     try {
+      const target = event.target;
+      const parentEl = target.nodeType === 3 ? target.parentElement : target;
+
+      if (!parentEl || !editorRef.value.contains(parentEl) || parentEl === editorRef.value) {
+        clearHighlightAndMagnifier();
+        return;
+      }
+
+      const tagName = parentEl.tagName;
+      if (!tagName) {
+        clearHighlightAndMagnifier();
+        return;
+      }
+
       let highlightInfo = null;
-
-      // NEW: Special case for image tags to use nth-of-type logic
       if (tagName === 'IMG') {
-        // Find all rendered image elements
         const allImages = Array.from(editorRef.value.querySelectorAll('img'));
-        // Find the specific index of the hovered image
-        const imageIndex = allImages.indexOf(target);
-
+        const imageIndex = allImages.indexOf(parentEl);
         if (imageIndex > -1) {
-          // Create highlight info based on the tag and its index
-          highlightInfo = {
-            tag: 'IMG',
-            index: imageIndex
-          };
+          highlightInfo = { tag: 'IMG', index: imageIndex };
         }
-      } else { // ORIGINAL: Logic for all other tags
-        const targetOuterHTML = target.outerHTML;
-        // Find all elements of the same tag type in the editor
+      } else {
+        const targetOuterHTML = parentEl.outerHTML;
         const allElementsOfSameType = editorRef.value.querySelectorAll(tagName);
-        // Filter to get only elements with the exact same outerHTML as our target
         const identicalElements = Array.from(allElementsOfSameType).filter(el => el.outerHTML === targetOuterHTML);
-        // Find the index of our specific hovered element among its identical peers
-        const hoverIndex = identicalElements.indexOf(target);
-
+        const hoverIndex = identicalElements.indexOf(parentEl);
         if (hoverIndex > -1) {
-          // Pass the unique element HTML and its specific index to the highlighter
-          highlightInfo = {
-            elementHTML: targetOuterHTML,
-            index: hoverIndex
-          };
+          highlightInfo = { elementHTML: targetOuterHTML, index: hoverIndex };
         }
       }
 
@@ -1105,6 +1100,59 @@ const handleVisualEditorHover = (event) => {
               inline: 'nearest'
             });
 
+            const codeContainerRect = highlighterRef.value.getBoundingClientRect();
+
+            let targetRange;
+            if (document.caretRangeFromPoint) {
+              targetRange = document.caretRangeFromPoint(event.clientX, event.clientY);
+            } else {
+              const position = document.caretPositionFromPoint(event.clientX, event.clientY);
+              if (position) {
+                targetRange = document.createRange();
+                targetRange.setStart(position.offsetNode, position.offset);
+                targetRange.collapse(true);
+              }
+            }
+
+            if (targetRange) {
+              const rangeRect = targetRange.getBoundingClientRect();
+              const editorRect = editorRef.value.getBoundingClientRect();
+
+              const relativeX = (rangeRect.left - editorRect.left) / editorRect.width;
+              const relativeY = (rangeRect.top - editorRect.top) / editorRect.height;
+
+              const highlightRect = highlightEl.getBoundingClientRect();
+              const estimatedX = highlightRect.left - codeContainerRect.left + (highlightRect.width * relativeX);
+              const estimatedY = highlightRect.top - codeContainerRect.top + (highlightRect.height * relativeY);
+
+              // --- FIX: Let CSS transform handle the centering ---
+              magnifierStyle.value = {
+                left: `${estimatedX}px`,
+                top: `${estimatedY}px`,
+              };
+
+              const textContent = parentEl.textContent || '';
+              const offset = targetRange.startOffset || 0;
+              let start = textContent.lastIndexOf(' ', offset) + 1;
+              let end = textContent.indexOf(' ', offset);
+              if (end === -1) end = textContent.length;
+
+              magnifiedContent.value = textContent.substring(start, end);
+              if (!magnifiedContent.value.trim() && highlightEl.textContent) {
+                magnifiedContent.value = highlightEl.textContent;
+              }
+            } else {
+              const highlightRect = highlightEl.getBoundingClientRect();
+               // --- FIX: Let CSS transform handle the centering in fallback too ---
+                magnifierStyle.value = {
+                    left: `${highlightRect.left - codeContainerRect.left + highlightRect.width / 2}px`,
+                    top: `${highlightRect.top - codeContainerRect.top + highlightRect.height / 2}px`,
+                };
+                magnifiedContent.value = highlightEl.textContent;
+            }
+
+            showMagnifier.value = true;
+
             const syncScrollAction = () => {
               if (htmlOutputRef.value) {
                 htmlOutputRef.value.scrollTop = highlighterRef.value.scrollTop;
@@ -1120,19 +1168,21 @@ const handleVisualEditorHover = (event) => {
           }
         });
       } else {
-        clearHighlight();
+        clearHighlightAndMagnifier();
       }
     } catch (error) {
       console.error('Error during hover handling:', error);
-      clearHighlight();
+      clearHighlightAndMagnifier();
+    } finally {
+      isHoverThrottled = false;
     }
-  }, 50);
+  });
 };
 
 
-const clearHighlight = () => {
-  clearTimeout(highlightDebounceTimer);
+const clearHighlightAndMagnifier = () => {
   updateHighlighterContent(currentHtml.value);
+  showMagnifier.value = false;
 };
 
 // Syncs scroll from user scrolling the textarea
@@ -1692,7 +1742,50 @@ onUnmounted(() => {
 .code-highlighter :deep(.highlight) {
   background-color: var(--highlight-bg);
   border-radius: 3px;
+  color: var(--text-color);
 }
+
+/* --- OPTIMIZED: Magnifier styles --- */
+.magnifier {
+  position: absolute;
+  z-index: 3;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  border: 3px solid var(--primary-color);
+  background-color: rgba(248, 250, 252, 0.6);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  box-shadow: 0 4px 15px var(--shadow-hover-color);
+  pointer-events: none;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Let CSS handle the centering on the `left` and `top` coordinates */
+  transform: translate(-50%, -50%);
+  /* Add a subtle transition for smoother positioning */
+  transition: top 0.05s linear, left 0.05s linear;
+}
+
+.html-editor.dark .magnifier {
+  background-color: rgba(30, 41, 59, 0.6);
+  border-color: var(--text-secondary);
+}
+
+.magnified-content {
+  font-family: 'Fira Code', monospace;
+  font-size: 17px;
+  line-height: 1.5;
+  padding: 15px;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-color);
+  text-align: left;
+  transform: scale(1.2);
+}
+
 
 /* Bubbles */
 .image-bubble, .link-bubble {
