@@ -55,7 +55,7 @@
     </div>
 
     <div class="main-content" ref="mainContentRef">
-      <div class="panel editor-panel" :style="{ width: editorWidth }">
+      <div class="panel editor-panel" :style="isMobileView ? { height: editorHeight } : { width: editorWidth }">
         <div class="panel-header">
           <h2 class="panel-title">Visual Editor</h2>
         </div>
@@ -132,7 +132,7 @@
 
       <div class="resizer" @mousedown="startResize"></div>
 
-      <div class="panel code-panel" :style="{ width: codeWidth }">
+      <div class="panel code-panel" :style="isMobileView ? { height: codeHeight } : { width: codeWidth }">
         <div class="panel-header">
           <h2 class="panel-title">HTML Code</h2>
         </div>
@@ -154,7 +154,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch } from 'vue';
+import { ref, onMounted, nextTick, watch, onBeforeUnmount } from 'vue';
 import { 
   ImageIcon, 
   SaveIcon, 
@@ -205,11 +205,22 @@ const isVisualEditorScrolling = ref(false);
 let visualScrollTimeout = null;
 let highlightDebounceTimer = null;
 
-// Resizing panels
+// --- MODIFICATION START ---
+// Resizing panels for both desktop and mobile
 const mainContentRef = ref(null);
 const editorWidth = ref('50%');
 const codeWidth = ref('50%');
+const editorHeight = ref('50%');
+const codeHeight = ref('50%');
 const isDragging = ref(false);
+const isMobileView = ref(false);
+
+// Function to check if the view is mobile
+const checkMobileView = () => {
+  isMobileView.value = window.innerWidth <= 768;
+};
+// --- MODIFICATION END ---
+
 
 // Toggle dark mode
 const toggleDarkMode = () => {
@@ -1031,22 +1042,47 @@ const startResize = () => {
   document.addEventListener('mouseup', stopResize);
 };
 
+// --- MODIFICATION START ---
+// Updated resize function to handle both horizontal and vertical dragging
 const resize = (event) => {
-  if (isDragging.value) {
-    const mainContent = mainContentRef.value;
-    if (mainContent) {
-      const { left, width } = mainContent.getBoundingClientRect();
-      const newEditorWidth = event.clientX - left;
-      const newCodeWidth = width - newEditorWidth;
+  if (!isDragging.value) return;
+  
+  const mainContent = mainContentRef.value;
+  if (!mainContent) return;
 
-      // Set minimum width for panels
-      if (newEditorWidth > 100 && newCodeWidth > 100) {
-        editorWidth.value = `${newEditorWidth}px`;
-        codeWidth.value = `${newCodeWidth}px`;
-      }
-    }
+  if (isMobileView.value) {
+    // Vertical resizing for mobile view
+    const { top, height } = mainContent.getBoundingClientRect();
+    const resizerHeight = 10; // As defined in CSS
+    let newEditorHeight = event.clientY - top;
+
+    // Add constraints
+    if (newEditorHeight < 50) newEditorHeight = 50;
+    if (newEditorHeight > height - 50 - resizerHeight) newEditorHeight = height - 50 - resizerHeight;
+    
+    const newCodeHeight = height - newEditorHeight - resizerHeight;
+
+    editorHeight.value = `${newEditorHeight}px`;
+    codeHeight.value = `${newCodeHeight}px`;
+
+  } else {
+    // Horizontal resizing for desktop view
+    const { left, width } = mainContent.getBoundingClientRect();
+    const resizerWidth = 5; // As defined in CSS
+    let newEditorWidth = event.clientX - left;
+
+    // Add constraints
+    if (newEditorWidth < 100) newEditorWidth = 100;
+    if (newEditorWidth > width - 100 - resizerWidth) newEditorWidth = width - 100 - resizerWidth;
+    
+    const newCodeWidth = width - newEditorWidth - resizerWidth;
+
+    editorWidth.value = `${newEditorWidth}px`;
+    codeWidth.value = `${newCodeWidth}px`;
   }
 };
+// --- MODIFICATION END ---
+
 
 const stopResize = () => {
   isDragging.value = false;
@@ -1056,6 +1092,12 @@ const stopResize = () => {
 
 // Initialize the editor
 onMounted(() => {
+  // --- MODIFICATION START ---
+  // Check initial view and set up resize listener
+  checkMobileView();
+  window.addEventListener('resize', checkMobileView);
+  // --- MODIFICATION END ---
+
   // Check for saved dark mode preference
   const savedMode = localStorage.getItem('htmlEditorDarkMode');
   if (savedMode === 'dark') {
@@ -1079,6 +1121,13 @@ onMounted(() => {
   // Initial highlighter content
   updateHighlighterContent(currentHtml.value);
 });
+
+// --- MODIFICATION START ---
+// Clean up the event listener when the component is unmounted
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', checkMobileView);
+});
+// --- MODIFICATION END ---
 </script>
 
 <style scoped>
@@ -1326,13 +1375,29 @@ onMounted(() => {
   box-sizing: border-box;
 }
 
+/* --- MODIFICATION START --- */
+/* Mobile view layout adjustments */
 @media (max-width: 768px) {
   .main-content {
     flex-direction: column;
-    gap: 10px;
+    gap: 0; /* The resizer will create the gap */
     padding: 10px;
   }
+  
+  .panel {
+    width: 100%; /* Ensure panels take full width */
+    min-height: 50px; /* Prevent collapsing during resize */
+    flex-shrink: 0; /* Respect the height set by JS */
+  }
+
+  .resizer {
+    width: 100%;
+    height: 10px; /* Make the resizer a horizontal bar */
+    cursor: ns-resize !important; /* North-South resize cursor */
+  }
 }
+/* --- MODIFICATION END --- */
+
 
 /* Panels - modify to use full height */
 .panel {
