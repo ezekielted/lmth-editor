@@ -1376,17 +1376,16 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-/* UPDATED: On mobile, ensure panel takes up the full available width and height is controlled by JS */
 @media (max-width: 768px) {
   .main-content {
     flex-direction: column;
-    gap: 10px; /* Use gap for spacing between panels and resizer */
+    /* REMOVED gap: 10px; */
     padding: 10px;
   }
 
   .panel {
-    width: 100%; /* Force full width on mobile */
-    height: 50%; /* Default height, will be overridden by inline style */
+    width: 100%;
+    height: 50%;
   }
 }
 
@@ -1616,12 +1615,14 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-/* UPDATED: Resizer styles for mobile (vertical layout) */
+/* Resizer styles for mobile (vertical layout) */
 @media (max-width: 768px) {
   .resizer {
     width: 100%;
-    height: 5px;
-    cursor: ns-resize; /* North-South resize cursor for vertical dragging */
+    height: 4px; /* A bit smaller */
+    cursor: ns-resize;
+    margin: 3px 0; /* ADDED margin to create visible space */
+    border-radius: 2px; /* ADDED for better visuals */
   }
 }
 </style>
