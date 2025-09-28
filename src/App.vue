@@ -3,12 +3,19 @@
     <div class="app-header">
       <div class="app-title-container">
         <h1 class="app-title">
-          <span class="bracket">&lt;</span>
-          <span class="letter">l</span>
-          <span class="letter">m</span>
-          <span class="letter">t</span>
-          <span class="letter-h">h</span>
-          <span class="bracket">&gt;</span>
+          <button @click="shiftLeft" class="bracket-button" aria-label="Shift letters left">&lt;</button>
+          
+          <TransitionGroup name="logo" tag="div" class="logo-letters">
+            <span 
+              v-for="(letter, index) in logoLetters" 
+              :key="letter"
+              :class="{ 'letter-h': index === logoLetters.length - 1, 'letter': index !== logoLetters.length - 1 }"
+            >
+              {{ letter }}
+            </span>
+          </TransitionGroup>
+
+          <button @click="shiftRight" class="bracket-button" aria-label="Shift letters right">&gt;</button>
         </h1>
         <p class="app-description">Code & Render in Sync</p>
       </div>
@@ -178,6 +185,9 @@ import {
   LinkIcon
 } from 'lucide-vue-next';
 
+// --- NEW: Logo state ---
+const logoLetters = ref(['l', 'm', 't', 'h']);
+
 const editorRef = ref(null);
 const htmlOutputRef = ref(null);
 const highlighterRef = ref(null);
@@ -235,6 +245,39 @@ const codeWidth = ref('50%');
 // Vertical (mobile) sizing
 const editorHeight = ref('50%');
 const codeHeight = ref('50%');
+
+// --- UPDATED: Logo movement functions ---
+const shiftRight = () => {
+  const currentState = logoLetters.value.join('');
+
+  // From the final state 'html', loop back to the start 'lmth'
+  if (currentState === 'html') {
+    logoLetters.value = ['l', 'm', 't', 'h'];
+  // From the state just before the end, go to 'html'
+  } else if (currentState === 'mthl') {
+    logoLetters.value = ['h', 't', 'm', 'l'];
+  // Otherwise, perform a normal circular shift to the right
+  } else {
+    const last = logoLetters.value.pop();
+    logoLetters.value.unshift(last);
+  }
+};
+
+const shiftLeft = () => {
+  const currentState = logoLetters.value.join('');
+  
+  // From the start 'lmth', go to the final state 'html'
+  if (currentState === 'lmth') {
+    logoLetters.value = ['h', 't', 'm', 'l'];
+  // From 'html', go to the previous state in the sequence
+  } else if (currentState === 'html') {
+    logoLetters.value = ['m', 't', 'h', 'l'];
+  // Otherwise, perform a normal circular shift to the left
+  } else {
+    const first = logoLetters.value.shift();
+    logoLetters.value.push(first);
+  }
+};
 
 // Close image replace menu on outside click
 const closeImageReplaceMenu = () => {
@@ -1292,14 +1335,37 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.bracket {
-  color: var(--bracket-color);
-  font-weight: 500;
+/* --- NEW Styles for Logo --- */
+.logo-letters {
+  display: flex;
+  position: relative;
 }
+
+.bracket-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 500;
+  color: var(--bracket-color);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.bracket-button:hover {
+  opacity: 0.7;
+}
+
+/* Animation styles */
+.logo-move {
+  transition: transform 0.5s ease;
+}
+/* --- End NEW Styles for Logo --- */
 
 .letter {
   color: var(--text-color);
   margin: 0 1px;
+  transition: all 0.3s;
 }
 
 .letter-h {
@@ -1308,6 +1374,7 @@ onUnmounted(() => {
   padding: 0 5px;
   border-radius: 4px;
   margin: 0 1px;
+  transition: all 0.3s;
 }
 
 .app-description {
