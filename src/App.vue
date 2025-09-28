@@ -154,7 +154,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch, onBeforeUnmount } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { 
   ImageIcon, 
   SaveIcon, 
@@ -205,21 +205,18 @@ const isVisualEditorScrolling = ref(false);
 let visualScrollTimeout = null;
 let highlightDebounceTimer = null;
 
-// --- MODIFICATION START ---
-// Resizing panels for both desktop and mobile
+// --- Resizing panels ---
 const mainContentRef = ref(null);
+const isDragging = ref(false);
+const isMobileView = ref(false); // NEW: State for mobile view detection
+
+// Horizontal (desktop) sizing
 const editorWidth = ref('50%');
 const codeWidth = ref('50%');
+
+// Vertical (mobile) sizing
 const editorHeight = ref('50%');
 const codeHeight = ref('50%');
-const isDragging = ref(false);
-const isMobileView = ref(false);
-
-// Function to check if the view is mobile
-const checkMobileView = () => {
-  isMobileView.value = window.innerWidth <= 768;
-};
-// --- MODIFICATION END ---
 
 
 // Toggle dark mode
@@ -1036,68 +1033,60 @@ const syncScroll = (event) => {
   }
 };
 
+// --- UPDATED Resizing Logic ---
 const startResize = () => {
   isDragging.value = true;
+  document.body.style.userSelect = 'none'; // Prevent text selection during drag
   document.addEventListener('mousemove', resize);
   document.addEventListener('mouseup', stopResize);
 };
 
-// --- MODIFICATION START ---
-// Updated resize function to handle both horizontal and vertical dragging
 const resize = (event) => {
   if (!isDragging.value) return;
-  
+
   const mainContent = mainContentRef.value;
   if (!mainContent) return;
 
+  // UPDATED: Check for mobile view to switch between horizontal and vertical resizing
   if (isMobileView.value) {
-    // Vertical resizing for mobile view
+    // Vertical resizing logic
     const { top, height } = mainContent.getBoundingClientRect();
-    const resizerHeight = 10; // As defined in CSS
-    let newEditorHeight = event.clientY - top;
+    const newEditorHeight = event.clientY - top;
+    const newCodeHeight = height - newEditorHeight;
 
-    // Add constraints
-    if (newEditorHeight < 50) newEditorHeight = 50;
-    if (newEditorHeight > height - 50 - resizerHeight) newEditorHeight = height - 50 - resizerHeight;
-    
-    const newCodeHeight = height - newEditorHeight - resizerHeight;
-
-    editorHeight.value = `${newEditorHeight}px`;
-    codeHeight.value = `${newCodeHeight}px`;
-
+    // Set minimum height for panels
+    if (newEditorHeight > 100 && newCodeHeight > 100) {
+      editorHeight.value = `${newEditorHeight}px`;
+      codeHeight.value = `${newCodeHeight}px`;
+    }
   } else {
-    // Horizontal resizing for desktop view
+    // Horizontal resizing logic (original)
     const { left, width } = mainContent.getBoundingClientRect();
-    const resizerWidth = 5; // As defined in CSS
-    let newEditorWidth = event.clientX - left;
+    const newEditorWidth = event.clientX - left;
+    const newCodeWidth = width - newEditorWidth;
 
-    // Add constraints
-    if (newEditorWidth < 100) newEditorWidth = 100;
-    if (newEditorWidth > width - 100 - resizerWidth) newEditorWidth = width - 100 - resizerWidth;
-    
-    const newCodeWidth = width - newEditorWidth - resizerWidth;
-
-    editorWidth.value = `${newEditorWidth}px`;
-    codeWidth.value = `${newCodeWidth}px`;
+    // Set minimum width for panels
+    if (newEditorWidth > 100 && newCodeWidth > 100) {
+      editorWidth.value = `${newEditorWidth}px`;
+      codeWidth.value = `${newCodeWidth}px`;
+    }
   }
 };
-// --- MODIFICATION END ---
-
 
 const stopResize = () => {
   isDragging.value = false;
+  document.body.style.userSelect = ''; // Re-enable text selection
   document.removeEventListener('mousemove', resize);
   document.removeEventListener('mouseup', stopResize);
 };
 
+// NEW: Function to check screen size and set mobile view state
+const checkScreenSize = () => {
+  isMobileView.value = window.innerWidth <= 768;
+};
+
 // Initialize the editor
 onMounted(() => {
-  // --- MODIFICATION START ---
-  // Check initial view and set up resize listener
-  checkMobileView();
-  window.addEventListener('resize', checkMobileView);
-  // --- MODIFICATION END ---
-
   // Check for saved dark mode preference
   const savedMode = localStorage.getItem('htmlEditorDarkMode');
   if (savedMode === 'dark') {
@@ -1120,14 +1109,16 @@ onMounted(() => {
 
   // Initial highlighter content
   updateHighlighterContent(currentHtml.value);
+
+  // NEW: Add window resize listener to handle layout changes
+  window.addEventListener('resize', checkScreenSize);
+  checkScreenSize(); // Initial check on mount
 });
 
-// --- MODIFICATION START ---
-// Clean up the event listener when the component is unmounted
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', checkMobileView);
+// NEW: Clean up the event listener on component unmount
+onUnmounted(() => {
+  window.removeEventListener('resize', checkScreenSize);
 });
-// --- MODIFICATION END ---
 </script>
 
 <style scoped>
@@ -1375,30 +1366,6 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
 }
 
-/* --- MODIFICATION START --- */
-/* Mobile view layout adjustments */
-@media (max-width: 768px) {
-  .main-content {
-    flex-direction: column;
-    gap: 0; /* The resizer will create the gap */
-    padding: 10px;
-  }
-  
-  .panel {
-    width: 100%; /* Ensure panels take full width */
-    min-height: 50px; /* Prevent collapsing during resize */
-    flex-shrink: 0; /* Respect the height set by JS */
-  }
-
-  .resizer {
-    width: 100%;
-    height: 10px; /* Make the resizer a horizontal bar */
-    cursor: ns-resize !important; /* North-South resize cursor */
-  }
-}
-/* --- MODIFICATION END --- */
-
-
 /* Panels - modify to use full height */
 .panel {
   background-color: var(--bg-secondary);
@@ -1407,8 +1374,22 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 4px var(--shadow-color);
   display: flex;
   flex-direction: column;
-  height: 100%;
 }
+
+/* UPDATED: On mobile, ensure panel takes up the full available width and height is controlled by JS */
+@media (max-width: 768px) {
+  .main-content {
+    flex-direction: column;
+    gap: 10px; /* Use gap for spacing between panels and resizer */
+    padding: 10px;
+  }
+
+  .panel {
+    width: 100%; /* Force full width on mobile */
+    height: 50%; /* Default height, will be overridden by inline style */
+  }
+}
+
 
 .panel-header {
   background-color: var(--primary-color);
@@ -1633,5 +1614,14 @@ onBeforeUnmount(() => {
   cursor: ew-resize;
   background-color: var(--border-color);
   flex-shrink: 0;
+}
+
+/* UPDATED: Resizer styles for mobile (vertical layout) */
+@media (max-width: 768px) {
+  .resizer {
+    width: 100%;
+    height: 5px;
+    cursor: ns-resize; /* North-South resize cursor for vertical dragging */
+  }
 }
 </style>
