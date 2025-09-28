@@ -236,6 +236,7 @@ const lastActiveElement = ref(null);
 const isVisualEditorScrolling = ref(false);
 let visualScrollTimeout = null;
 let isHoverThrottled = false; // OPTIMIZATION: Throttling flag for hover events
+const persistentHighlightInfo = ref(null); // NEW: State for persistent highlight
 
 // NEW: Magnifier state
 const showMagnifier = ref(false);
@@ -633,15 +634,53 @@ const handleKeyDown = (event) => {
   }
 };
 
-// Handle click inside the editor
+/**
+ * --- NEW ---
+ * Compares two highlight info objects to see if they refer to the same element.
+ * @param {object|null} infoA The first highlight info object.
+ * @param {object|null} infoB The second highlight info object.
+ * @returns {boolean} True if they represent the same element.
+ */
+const areSameHighlight = (infoA, infoB) => {
+  if (!infoA || !infoB) return false;
+  // Fast check for images by index
+  if (infoA.tag === 'IMG' && infoB.tag === 'IMG') {
+    return infoA.index === infoB.index;
+  }
+  // Check for other elements by HTML content and index
+  if (infoA.elementHTML && infoB.elementHTML) {
+    return infoA.elementHTML === infoB.elementHTML && infoA.index === infoB.index;
+  }
+  return false;
+};
+
+/**
+ * --- UPDATED ---
+ * Handles clicks inside the editor. It now toggles a persistent highlight on the
+ * clicked element's corresponding code.
+ */
 const handleEditorClick = (event) => {
+  const target = event.target;
+  const parentEl = target.nodeType === 3 ? target.parentElement : target;
+
+  const newHighlightInfo = getHighlightInfoForElement(parentEl);
+
+  // If clicking the currently highlighted element, toggle it off.
+  if (areSameHighlight(persistentHighlightInfo.value, newHighlightInfo)) {
+    persistentHighlightInfo.value = null;
+  } else {
+    // Otherwise, set the new highlight. This will be null if the background was clicked.
+    persistentHighlightInfo.value = newHighlightInfo;
+  }
+  
+  updateHighlighterContent(currentHtml.value); // Apply the highlight change immediately
+
+  // --- Existing logic for image bubble ---
   const x = event.clientX;
   const y = event.clientY;
   
-  // Save the current selection
   saveSelection();
   
-  // Position the bubble relative to the editor container
   const rect = editorRef.value.getBoundingClientRect();
   bubbleStyle.value = {
     left: `${x - rect.left + 10}px`,
@@ -650,7 +689,6 @@ const handleEditorClick = (event) => {
   
   showImageBubble.value = true;
   
-  // Hide bubble after a delay if not interacted with
   setTimeout(() => {
     if (!showImagePrompt.value) {
       showImageBubble.value = false;
@@ -964,8 +1002,51 @@ const findNthOccurrence = (string, substring, n) => {
   return index;
 };
 
-const updateHighlighterContent = (content, highlightInfo = null) => {
+/**
+ * --- NEW ---
+ * Helper function to generate highlight information for a given DOM element.
+ * @param {HTMLElement} element The element to get information for.
+ * @returns {object|null} An object with highlight details or null.
+ */
+const getHighlightInfoForElement = (element) => {
+  if (!element || !editorRef.value || !editorRef.value.contains(element) || element === editorRef.value) {
+    return null;
+  }
+
+  const tagName = element.tagName;
+  if (!tagName) return null;
+
+  if (tagName === 'IMG') {
+    const allImages = Array.from(editorRef.value.querySelectorAll('img'));
+    const imageIndex = allImages.indexOf(element);
+    if (imageIndex > -1) {
+      return { tag: 'IMG', index: imageIndex };
+    }
+  } else {
+    const targetOuterHTML = element.outerHTML;
+    const allElementsOfSameType = editorRef.value.querySelectorAll(tagName);
+    const identicalElements = Array.from(allElementsOfSameType).filter(el => el.outerHTML === targetOuterHTML);
+    const elementIndex = identicalElements.indexOf(element);
+    if (elementIndex > -1) {
+      return { elementHTML: targetOuterHTML, index: elementIndex };
+    }
+  }
+  return null;
+};
+
+
+/**
+ * --- UPDATED ---
+ * Renders the HTML content with a highlighted section. It now prioritizes
+ * the persistent highlight and falls back to the temporary hover highlight.
+ * @param {string} content The HTML string to render.
+ * @param {object|null} hoverHighlightInfo Info for a temporary hover highlight.
+ */
+const updateHighlighterContent = (content, hoverHighlightInfo = null) => {
   if (!highlighterRef.value) return;
+
+  // Prioritize the persistent highlight over the hover one.
+  const highlightInfo = persistentHighlightInfo.value || hoverHighlightInfo;
 
   if (!highlightInfo) {
     highlighterRef.value.innerHTML = escapeHtml(content);
@@ -975,28 +1056,19 @@ const updateHighlighterContent = (content, highlightInfo = null) => {
   let startPos = -1;
   let endPos = -1;
 
-  // NEW: Logic for IMG tags using their overall index in the document
   if (highlightInfo.tag === 'IMG') {
     const { index } = highlightInfo;
     let searchFrom = -1;
-    // Find the starting position of the nth '<img' tag
     for (let i = 0; i <= index; i++) {
-      // Case-insensitive search
       searchFrom = content.toLowerCase().indexOf('<img', searchFrom + 1);
-      if (searchFrom === -1) {
-        break; // Nth image tag not found in the string
-      }
+      if (searchFrom === -1) break;
     }
-
     if (searchFrom !== -1) {
       startPos = searchFrom;
-      // Find the closing '>' of that specific tag
       const tagEnd = content.indexOf('>', startPos);
-      if (tagEnd !== -1) {
-        endPos = tagEnd + 1; // Include the '>' in the highlight
-      }
+      if (tagEnd !== -1) endPos = tagEnd + 1;
     }
-  } else { // ORIGINAL LOGIC for all other tags based on outerHTML
+  } else {
     const { elementHTML, index } = highlightInfo;
     startPos = findNthOccurrence(content, elementHTML, index);
     if (startPos !== -1) {
@@ -1004,27 +1076,28 @@ const updateHighlighterContent = (content, highlightInfo = null) => {
     }
   }
 
-  // Common rendering logic if a valid position was found
   if (startPos !== -1 && endPos !== -1) {
     const before = content.substring(0, startPos);
     const highlight = content.substring(startPos, endPos);
     const after = content.substring(endPos);
+    
+    // The `id` is only added for hover events to target for scrolling.
+    const highlightId = hoverHighlightInfo ? 'id="highlight-target"' : '';
 
-    // Escape each part individually and reconstruct with the <mark> tag.
     const finalContent =
       escapeHtml(before) +
-      `<mark class="highlight" id="highlight-target">${escapeHtml(highlight)}</mark>` +
+      `<mark class="highlight" ${highlightId}>${escapeHtml(highlight)}</mark>` +
       escapeHtml(after);
 
     highlighterRef.value.innerHTML = finalContent;
   } else {
-    // Fallback if no match was found (e.g., due to DOM/string desync)
     highlighterRef.value.innerHTML = escapeHtml(content);
   }
 };
 
 
 watch(currentHtml, (newHtml) => {
+  // When code changes, re-apply the current highlight (persistent or none).
   updateHighlighterContent(newHtml);
   if (htmlOutputRef.value && highlighterRef.value) {
       highlighterRef.value.scrollTop = htmlOutputRef.value.scrollTop;
@@ -1041,10 +1114,9 @@ const handleVisualEditorScroll = () => {
 };
 
 /**
- * --- OPTIMIZED ---
- * This function now uses requestAnimationFrame to throttle execution, ensuring smooth
- * performance by syncing with the browser's render cycle. It also corrects the
- * magnifier's position by relying on CSS transforms for centering.
+ * --- UPDATED ---
+ * This function now uses the refactored `getHighlightInfoForElement` helper
+ * and passes the hover information to `updateHighlighterContent`.
  */
 const handleVisualEditorHover = (event) => {
   if (isVisualEditorScrolling.value || isHoverThrottled) return;
@@ -1055,35 +1127,10 @@ const handleVisualEditorHover = (event) => {
       const target = event.target;
       const parentEl = target.nodeType === 3 ? target.parentElement : target;
 
-      if (!parentEl || !editorRef.value.contains(parentEl) || parentEl === editorRef.value) {
-        clearHighlightAndMagnifier();
-        return;
-      }
-
-      const tagName = parentEl.tagName;
-      if (!tagName) {
-        clearHighlightAndMagnifier();
-        return;
-      }
-
-      let highlightInfo = null;
-      if (tagName === 'IMG') {
-        const allImages = Array.from(editorRef.value.querySelectorAll('img'));
-        const imageIndex = allImages.indexOf(parentEl);
-        if (imageIndex > -1) {
-          highlightInfo = { tag: 'IMG', index: imageIndex };
-        }
-      } else {
-        const targetOuterHTML = parentEl.outerHTML;
-        const allElementsOfSameType = editorRef.value.querySelectorAll(tagName);
-        const identicalElements = Array.from(allElementsOfSameType).filter(el => el.outerHTML === targetOuterHTML);
-        const hoverIndex = identicalElements.indexOf(parentEl);
-        if (hoverIndex > -1) {
-          highlightInfo = { elementHTML: targetOuterHTML, index: hoverIndex };
-        }
-      }
+      const highlightInfo = getHighlightInfoForElement(parentEl);
 
       if (highlightInfo) {
+        // Pass hover info for temporary highlight and magnifier positioning.
         updateHighlighterContent(currentHtml.value, highlightInfo);
 
         nextTick(() => {
@@ -1125,7 +1172,6 @@ const handleVisualEditorHover = (event) => {
               const estimatedX = highlightRect.left - codeContainerRect.left + (highlightRect.width * relativeX);
               const estimatedY = highlightRect.top - codeContainerRect.top + (highlightRect.height * relativeY);
 
-              // --- FIX: Let CSS transform handle the centering ---
               magnifierStyle.value = {
                 left: `${estimatedX}px`,
                 top: `${estimatedY}px`,
@@ -1143,7 +1189,6 @@ const handleVisualEditorHover = (event) => {
               }
             } else {
               const highlightRect = highlightEl.getBoundingClientRect();
-               // --- FIX: Let CSS transform handle the centering in fallback too ---
                 magnifierStyle.value = {
                     left: `${highlightRect.left - codeContainerRect.left + highlightRect.width / 2}px`,
                     top: `${highlightRect.top - codeContainerRect.top + highlightRect.height / 2}px`,
@@ -1179,9 +1224,14 @@ const handleVisualEditorHover = (event) => {
   });
 };
 
-
+/**
+ * --- UPDATED ---
+ * Clears the magnifier and any temporary hover highlight, but preserves the
+ * persistent (clicked) highlight.
+ */
 const clearHighlightAndMagnifier = () => {
-  updateHighlighterContent(currentHtml.value);
+  // Passing `null` as the second argument clears the hover highlight.
+  updateHighlighterContent(currentHtml.value, null);
   showMagnifier.value = false;
 };
 
@@ -1743,6 +1793,7 @@ onUnmounted(() => {
   background-color: var(--highlight-bg);
   border-radius: 3px;
   color: var(--text-color);
+  transition: background-color 0.3s ease;
 }
 
 /* --- OPTIMIZED: Magnifier styles --- */
