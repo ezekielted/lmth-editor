@@ -167,7 +167,7 @@ import {
 const editorRef = ref(null);
 const htmlOutputRef = ref(null);
 const highlighterRef = ref(null);
-const currentHtml = ref('<p>Hover over this text to see the magic!</p><h1>Or this heading...</h1><p>Now, try hovering over the image below!</p><img src="https://via.placeholder.com/400x150.png?text=Hover+Me!" alt="Placeholder Image">');
+const currentHtml = ref('<h2>Welcome, friend! Click to edit me</h2><p>Hover to find me 🙂</p>');
 const isDarkMode = ref(false);
 
 // Undo/Redo history
