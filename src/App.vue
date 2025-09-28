@@ -74,6 +74,7 @@
             @mousedown="handleEditorMouseDown"
             @mouseover="handleVisualEditorHover"
             @mouseleave="clearHighlight"
+            @contextmenu.prevent="handleImageRightClick"
           ></div>
           
           <!-- Floating Image Bubble -->
@@ -88,6 +89,17 @@
             <button @click.stop="openLinkPrompt" class="bubble-btn">
               <i class="icon"><LinkIcon /></i>
             </button>
+          </div>
+
+          <!-- Image Replace Context Menu -->
+          <div v-if="showImageReplaceMenu" class="image-replace-menu" :style="imageReplaceMenuStyle" @click.stop>
+            <input 
+              v-model="newImageUrl" 
+              type="text" 
+              placeholder="Enter new image URL"
+              @keyup.enter="replaceImage"
+            />
+            <button @click="replaceImage" class="btn btn-primary">Replace</button>
           </div>
           
           <!-- Image URL Modal -->
@@ -187,6 +199,12 @@ const bubbleStyle = ref({});
 const imageUrlInput = ref(null);
 const savedSelection = ref(null);
 
+// Image replacement
+const showImageReplaceMenu = ref(false);
+const imageReplaceMenuStyle = ref({});
+const newImageUrl = ref('');
+const targetImage = ref(null);
+
 // Link insertion
 const showLinkBubble = ref(false);
 const showLinkPrompt = ref(false);
@@ -218,6 +236,18 @@ const codeWidth = ref('50%');
 const editorHeight = ref('50%');
 const codeHeight = ref('50%');
 
+// Close image replace menu on outside click
+const closeImageReplaceMenu = () => {
+  showImageReplaceMenu.value = false;
+};
+
+onMounted(() => {
+  document.addEventListener('click', closeImageReplaceMenu);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeImageReplaceMenu);
+});
 
 // Toggle dark mode
 const toggleDarkMode = () => {
@@ -574,6 +604,43 @@ const handleEditorClick = (event) => {
       showImageBubble.value = false;
     }
   }, 3000);
+};
+
+// Handle right-click on image
+const handleImageRightClick = (event) => {
+  if (event.target.tagName === 'IMG') {
+    event.preventDefault();
+    targetImage.value = event.target;
+    
+    const rect = editorRef.value.getBoundingClientRect();
+    imageReplaceMenuStyle.value = {
+      left: `${event.clientX - rect.left}px`,
+      top: `${event.clientY - rect.top}px`,
+    };
+    showImageReplaceMenu.value = true;
+  }
+};
+
+// Replace image
+const replaceImage = () => {
+  if (targetImage.value && newImageUrl.value) {
+    let imgSrc;
+    const googleDriveId = extractGoogleDriveImageId(newImageUrl.value);
+
+    if (googleDriveId) {
+      imgSrc = `https://drive.google.com/thumbnail?id=${googleDriveId}&sz=s4000`;
+    } else if (isValidUrl(newImageUrl.value)) {
+      imgSrc = newImageUrl.value;
+    } else {
+      alert('Invalid image URL. Please enter a valid URL or Google Drive link.');
+      return;
+    }
+
+    targetImage.value.src = imgSrc;
+    handleEditorInput();
+    newImageUrl.value = '';
+    showImageReplaceMenu.value = false;
+  }
 };
 
 // Open the image URL prompt
@@ -1533,6 +1600,26 @@ onUnmounted(() => {
   position: absolute;
   z-index: 10;
 }
+
+.image-replace-menu {
+  position: absolute;
+  z-index: 10;
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px;
+  box-shadow: 0 2px 5px var(--shadow-color);
+  display: flex;
+  gap: 8px;
+}
+
+.image-replace-menu input {
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 6px;
+  font-size: 0.9rem;
+}
+
 
 .bubble-btn {
   background-color: var(--primary-color);
