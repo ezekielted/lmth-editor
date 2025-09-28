@@ -1232,10 +1232,39 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* --- NEW: Keyframe animations --- */
+@keyframes jiggle {
+  0%, 100% { transform: rotate(-1deg); }
+  50% { transform: rotate(1deg); }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* Base styles and variables */
 .html-editor {
   --primary-color: #2d3748;
   --primary-hover: #1a202c;
+  --primary-focus-glow: rgba(45, 55, 72, 0.4);
   --secondary-color: #4a5568;
   --secondary-hover: #2d3748;
   --danger-color: #e53e3e;
@@ -1245,32 +1274,30 @@ onUnmounted(() => {
   --bg-color: #ffffff;
   --bg-secondary: #f8fafc;
   --border-color: #e2e8f0;
-  --shadow-color: rgba(0, 0, 0, 0.1);
+  --shadow-color: rgba(45, 55, 72, 0.1);
+  --shadow-hover-color: rgba(45, 55, 72, 0.2);
   --scrollbar-bg: #f1f5f9;
   --scrollbar-thumb: #94a3b8;
   --bracket-color: var(--text-color);
   --h-bg-color: #000000;
   --h-text-color: #ffffff;
   --highlight-bg: #fde68a; /* Dull amber yellow */
-  --ruled-line-color: #d1d5db; /* Slightly darker for light mode */
+  --ruled-line-color: #d1d5db;
 
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   
-  /* Fullscreen modifications - remove constraints */
   width: 100vw;
   height: 100vh;
   margin: 0;
   padding: 0;
   
-  /* Use flexbox for better layout control */
   display: flex;
   flex-direction: column;
   
   color: var(--text-color);
   background-color: var(--bg-color);
-  transition: all 0.3s ease;
+  transition: background-color 0.4s ease, color 0.4s ease;
   
-  /* Make sure it takes the full screen */
   position: fixed;
   top: 0;
   left: 0;
@@ -1284,6 +1311,7 @@ onUnmounted(() => {
 .html-editor.dark {
   --primary-color: #1a202c;
   --primary-hover: #0f172a;
+  --primary-focus-glow: rgba(148, 163, 184, 0.4);
   --secondary-color: #4a5568;
   --secondary-hover: #2d3748;
   --danger-color: #f87171;
@@ -1293,17 +1321,18 @@ onUnmounted(() => {
   --bg-color: #0f172a;
   --bg-secondary: #1e293b;
   --border-color: #334155;
-  --shadow-color: rgba(0, 0, 0, 0.5);
+  --shadow-color: rgba(0, 0, 0, 0.2);
+  --shadow-hover-color: rgba(0, 0, 0, 0.4);
   --scrollbar-bg: #1e293b;
   --scrollbar-thumb: #64748b;
   --bracket-color: var(--text-color);
   --h-bg-color: #ffffff;
   --h-text-color: #000000;
-  --highlight-bg: #fBBF2480; /* Amber with opacity */
-  --ruled-line-color: #475569; /* Lighter for dark mode */
+  --highlight-bg: #fBBF2480;
+  --ruled-line-color: #475569;
 }
 
-/* App header - Improved for better responsiveness */
+/* App header */
 .app-header {
   display: flex;
   justify-content: space-between;
@@ -1314,6 +1343,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   min-height: 60px;
   box-sizing: border-box;
+  transition: border-color 0.4s ease;
 }
 
 .app-title-container {
@@ -1335,7 +1365,7 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-/* --- NEW Styles for Logo --- */
+/* Styles for Logo Animation */
 .logo-letters {
   display: flex;
   position: relative;
@@ -1344,28 +1374,38 @@ onUnmounted(() => {
 .bracket-button {
   background: none;
   border: none;
-  padding: 0;
+  padding: 0 5px;
   font-family: inherit;
   font-size: inherit;
   font-weight: 500;
   color: var(--bracket-color);
   cursor: pointer;
   border-radius: 4px;
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 .bracket-button:hover {
   opacity: 0.7;
+  transform: scale(1.1);
 }
 
-/* Animation styles */
-.logo-move {
-  transition: transform 0.5s ease;
+/* --- Vue TransitionGroup styles for the logo --- */
+.logo-move,
+.logo-enter-active,
+.logo-leave-active {
+  transition: all 0.5s cubic-bezier(0.55, 0, 0.1, 1);
 }
-/* --- End NEW Styles for Logo --- */
+.logo-enter-from,
+.logo-leave-to {
+  opacity: 0;
+  transform: scaleY(0.01) translate(30px, 0);
+}
+.logo-leave-active {
+  position: absolute;
+}
 
-.letter {
-  color: var(--text-color);
+.letter, .letter-h {
   margin: 0 1px;
-  transition: all 0.3s;
+  transition: all 0.4s ease;
 }
 
 .letter-h {
@@ -1373,8 +1413,6 @@ onUnmounted(() => {
   background-color: var(--h-bg-color);
   padding: 0 5px;
   border-radius: 4px;
-  margin: 0 1px;
-  transition: all 0.3s;
 }
 
 .app-description {
@@ -1398,16 +1436,18 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
   flex-shrink: 0;
   margin-left: auto;
 }
 
 .theme-toggle:hover {
   background-color: var(--bg-secondary);
+  transform: scale(1.1) rotate(15deg);
+  animation: jiggle 0.4s infinite;
 }
 
-/* Toolbar - Improved for better responsiveness */
+/* Toolbar */
 .toolbar {
   display: flex;
   justify-content: space-between;
@@ -1419,6 +1459,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   z-index: 1;
   box-sizing: border-box;
+  transition: background-color 0.4s ease, box-shadow 0.4s ease;
 }
 
 .toolbar-section {
@@ -1428,7 +1469,7 @@ onUnmounted(() => {
   align-items: center;
 }
 
-/* Buttons - Improved for better responsiveness */
+/* Buttons */
 .btn {
   display: flex;
   align-items: center;
@@ -1438,9 +1479,10 @@ onUnmounted(() => {
   font-weight: 500;
   font-size: 0.85rem;
   cursor: pointer;
-  transition: all 0.2s;
   border: none;
   white-space: nowrap;
+  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  box-shadow: 0 1px 3px var(--shadow-color);
 }
 
 @media (max-width: 480px) {
@@ -1455,12 +1497,22 @@ onUnmounted(() => {
   }
 }
 
+.btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px var(--shadow-hover-color);
+  animation: jiggle 0.4s;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0px);
+  box-shadow: 0 1px 3px var(--shadow-color);
+}
+
 .btn-primary {
   background-color: var(--primary-color);
   color: white;
 }
-
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background-color: var(--primary-hover);
 }
 
@@ -1468,8 +1520,7 @@ onUnmounted(() => {
   background-color: var(--secondary-color);
   color: white;
 }
-
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background-color: var(--secondary-hover);
 }
 
@@ -1477,8 +1528,7 @@ onUnmounted(() => {
   background-color: var(--danger-color);
   color: white;
 }
-
-.btn-danger:hover {
+.btn-danger:hover:not(:disabled) {
   background-color: var(--danger-hover);
 }
 
@@ -1491,7 +1541,7 @@ onUnmounted(() => {
   display: none;
 }
 
-/* Main content layout - now with flex-grow to fill available space */
+/* Main content layout */
 .main-content {
   display: flex;
   padding: 15px;
@@ -1500,20 +1550,19 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
-/* Panels - modify to use full height */
 .panel {
   background-color: var(--bg-secondary);
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 2px 4px var(--shadow-color);
+  box-shadow: 0 2px 8px var(--shadow-color);
   display: flex;
   flex-direction: column;
+  transition: background-color 0.4s ease, box-shadow 0.4s ease;
 }
 
 @media (max-width: 768px) {
   .main-content {
     flex-direction: column;
-    /* REMOVED gap: 10px; */
     padding: 10px;
   }
 
@@ -1523,22 +1572,21 @@ onUnmounted(() => {
   }
 }
 
-
 .panel-header {
   background-color: var(--primary-color);
   color: white;
   padding: 10px 15px;
   flex-shrink: 0;
+  transition: background-color 0.4s ease;
 }
 
 .panel-title {
   margin: 0;
   font-size: 1.1rem;
   font-weight: 600;
-  color: white; /* Ensure high contrast in both modes */
+  color: white;
 }
 
-/* Editor - modify to use full height of panel */
 .editor-container {
   border: 1px solid var(--border-color);
   border-radius: 0 0 8px 8px;
@@ -1546,7 +1594,8 @@ onUnmounted(() => {
   position: relative;
   flex-grow: 1;
   overflow: auto;
-  background-color: white; /* Always white background */
+  background-color: white;
+  transition: border-color 0.4s ease;
 }
 
 /* Custom scrollbar styles */
@@ -1571,19 +1620,11 @@ onUnmounted(() => {
 .editor-content {
   outline: none;
   min-height: 100%;
-  color: #1e293b; /* Always dark text for readability */
-  background-color: white; /* Always white background */
+  color: #1e293b;
+  background-color: white;
 }
 
-.editor-content img {
-  max-width: 100%;
-  height: auto;
-  display: block;
-  margin: 10px 0;
-  border-radius: 4px;
-}
-
-.editor-content .editor-image {
+.editor-content img, .editor-content .editor-image {
   max-width: 100%;
   height: auto;
   display: block;
@@ -1596,7 +1637,6 @@ onUnmounted(() => {
   text-decoration: underline;
 }
 
-/* NEW: Code Editor container */
 .code-editor-container {
   position: relative;
   flex-grow: 1;
@@ -1621,24 +1661,23 @@ onUnmounted(() => {
   box-sizing: border-box;
   border: none;
   outline: none;
+  transition: color 0.4s ease, background-color 0.4s ease;
 }
 
 .html-output-textarea {
   background-color: transparent;
-  color: transparent; /* Text is invisible, we see the highlighter's text */
-  caret-color: var(--text-color); /* But the caret is visible */
+  color: transparent;
+  caret-color: var(--text-color);
   resize: none;
-  overflow: auto; /* This is the element that actually scrolls */
+  overflow: auto;
   z-index: 2;
 }
 
 .code-highlighter {
   pointer-events: none;
   z-index: 1;
-  overflow: hidden; /* Scrolling is controlled by the textarea */
+  overflow: hidden;
   text-align: left;
-  
-  /* --- Ruled Paper Texture --- */
   background-image: repeating-linear-gradient(
     transparent 0,
     transparent calc(1.5em - 1px),
@@ -1646,8 +1685,8 @@ onUnmounted(() => {
     var(--ruled-line-color) 1.5em
   );
   background-size: 100% 1.5em;
-  background-attachment: local; /* Make background scroll with content */
-  background-position-y: 15px;  /* Align with top padding */
+  background-attachment: local;
+  background-position-y: 15px;
 }
 
 .code-highlighter :deep(.highlight) {
@@ -1655,17 +1694,11 @@ onUnmounted(() => {
   border-radius: 3px;
 }
 
-
-/* Image bubble */
-.image-bubble {
+/* Bubbles */
+.image-bubble, .link-bubble {
   position: absolute;
   z-index: 10;
-}
-
-/* Link bubble */
-.link-bubble {
-  position: absolute;
-  z-index: 10;
+  animation: popIn 0.3s ease-out forwards;
 }
 
 .image-replace-menu {
@@ -1675,9 +1708,10 @@ onUnmounted(() => {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 8px;
-  box-shadow: 0 2px 5px var(--shadow-color);
+  box-shadow: 0 4px 12px var(--shadow-hover-color);
   display: flex;
   gap: 8px;
+  animation: popIn 0.2s ease-out forwards;
 }
 
 .image-replace-menu input {
@@ -1686,7 +1720,6 @@ onUnmounted(() => {
   padding: 6px;
   font-size: 0.9rem;
 }
-
 
 .bubble-btn {
   background-color: var(--primary-color);
@@ -1700,11 +1733,11 @@ onUnmounted(() => {
   justify-content: center;
   cursor: pointer;
   box-shadow: 0 2px 5px var(--shadow-color);
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
 }
-
 .bubble-btn:hover {
   background-color: var(--primary-hover);
+  transform: scale(1.1);
 }
 
 /* Modal */
@@ -1727,7 +1760,8 @@ onUnmounted(() => {
   border-radius: 12px;
   width: 90%;
   max-width: 400px;
-  box-shadow: 0 4px 20px var(--shadow-color);
+  box-shadow: 0 4px 20px var(--shadow-hover-color);
+  animation: fadeInScale 0.3s ease-out forwards;
 }
 
 .modal-title {
@@ -1746,6 +1780,13 @@ onUnmounted(() => {
   background-color: var(--bg-secondary);
   color: var(--text-color);
   font-size: 0.95rem;
+  transition: all 0.3s ease;
+}
+
+.modal-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px var(--primary-focus-glow);
 }
 
 .modal-actions {
@@ -1767,16 +1808,19 @@ onUnmounted(() => {
   cursor: ew-resize;
   background-color: var(--border-color);
   flex-shrink: 0;
+  transition: background-color 0.3s ease;
+}
+.resizer:hover {
+  background-color: var(--primary-color);
 }
 
-/* Resizer styles for mobile (vertical layout) */
 @media (max-width: 768px) {
   .resizer {
     width: 100%;
-    height: 4px; /* A bit smaller */
+    height: 4px;
     cursor: ns-resize;
-    margin: 3px 0; /* ADDED margin to create visible space */
-    border-radius: 2px; /* ADDED for better visuals */
+    margin: 3px 0;
+    border-radius: 2px;
   }
 }
 </style>
