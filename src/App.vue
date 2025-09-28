@@ -54,8 +54,8 @@
       </div>
     </div>
 
-    <div class="main-content">
-      <div class="panel editor-panel">
+    <div class="main-content" ref="mainContentRef">
+      <div class="panel editor-panel" :style="{ width: editorWidth }">
         <div class="panel-header">
           <h2 class="panel-title">Visual Editor</h2>
         </div>
@@ -130,7 +130,9 @@
         </div>
       </div>
 
-      <div class="panel code-panel">
+      <div class="resizer" @mousedown="startResize"></div>
+
+      <div class="panel code-panel" :style="{ width: codeWidth }">
         <div class="panel-header">
           <h2 class="panel-title">HTML Code</h2>
         </div>
@@ -202,6 +204,12 @@ const lastActiveElement = ref(null);
 const isVisualEditorScrolling = ref(false);
 let visualScrollTimeout = null;
 let highlightDebounceTimer = null;
+
+// Resizing panels
+const mainContentRef = ref(null);
+const editorWidth = ref('50%');
+const codeWidth = ref('50%');
+const isDragging = ref(false);
 
 // Toggle dark mode
 const toggleDarkMode = () => {
@@ -1017,6 +1025,34 @@ const syncScroll = (event) => {
   }
 };
 
+const startResize = () => {
+  isDragging.value = true;
+  document.addEventListener('mousemove', resize);
+  document.addEventListener('mouseup', stopResize);
+};
+
+const resize = (event) => {
+  if (isDragging.value) {
+    const mainContent = mainContentRef.value;
+    if (mainContent) {
+      const { left, width } = mainContent.getBoundingClientRect();
+      const newEditorWidth = event.clientX - left;
+      const newCodeWidth = width - newEditorWidth;
+
+      // Set minimum width for panels
+      if (newEditorWidth > 100 && newCodeWidth > 100) {
+        editorWidth.value = `${newEditorWidth}px`;
+        codeWidth.value = `${newCodeWidth}px`;
+      }
+    }
+  }
+};
+
+const stopResize = () => {
+  isDragging.value = false;
+  document.removeEventListener('mousemove', resize);
+  document.removeEventListener('mouseup', stopResize);
+};
 
 // Initialize the editor
 onMounted(() => {
@@ -1283,9 +1319,7 @@ onMounted(() => {
 
 /* Main content layout - now with flex-grow to fill available space */
 .main-content {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 15px;
+  display: flex;
   padding: 15px;
   flex-grow: 1;
   overflow: hidden;
@@ -1294,7 +1328,7 @@ onMounted(() => {
 
 @media (max-width: 768px) {
   .main-content {
-    grid-template-columns: 1fr;
+    flex-direction: column;
     gap: 10px;
     padding: 10px;
   }
@@ -1527,5 +1561,12 @@ onMounted(() => {
   align-items: center;
   width: 18px;
   height: 18px;
+}
+
+.resizer {
+  width: 5px;
+  cursor: ew-resize;
+  background-color: var(--border-color);
+  flex-shrink: 0;
 }
 </style>
