@@ -1332,11 +1332,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* --- NEW: Keyframe animations --- */
-@keyframes jiggle {
-  0%, 100% { transform: rotate(-1deg); }
-  50% { transform: rotate(1deg); }
-}
+/* --- REMOVED: Keyframe animations for jiggle --- */
 
 @keyframes fadeInScale {
   from {
@@ -1544,7 +1540,7 @@ onUnmounted(() => {
 .theme-toggle:hover {
   background-color: var(--bg-secondary);
   transform: scale(1.1) rotate(15deg);
-  animation: jiggle 0.4s infinite;
+  /* REMOVED: animation: jiggle 0.4s; */
 }
 
 /* Toolbar */
@@ -1600,7 +1596,7 @@ onUnmounted(() => {
 .btn:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 4px 8px var(--shadow-hover-color);
-  animation: jiggle 0.4s;
+  /* REMOVED: animation: jiggle 0.4s; */
 }
 
 .btn:active:not(:disabled) {
