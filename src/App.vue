@@ -82,6 +82,7 @@
             @mousemove="handleVisualEditorHover"
             @mouseleave="clearHighlightAndMagnifier"
             @contextmenu.prevent="handleImageRightClick"
+            @paste="handlePaste"
           ></div>
           
           <!-- Floating Image Bubble -->
@@ -533,6 +534,34 @@ const handleTextSelection = () => {
       showLinkBubble.value = false;
     }
   }, 3000);
+};
+
+// Handle paste event
+const handlePaste = (event) => {
+  // Prevent the default paste action to avoid bringing in unwanted formatting
+  event.preventDefault();
+  
+  // Get the plain text from the clipboard
+  const text = (event.clipboardData || window.clipboardData).getData('text/plain');
+  
+  // Insert the plain text into the editor at the current selection
+  const selection = window.getSelection();
+  if (!selection.rangeCount) return;
+  
+  const range = selection.getRangeAt(0);
+  range.deleteContents();
+  
+  const textNode = document.createTextNode(text);
+  range.insertNode(textNode);
+  
+  // Move the cursor to the end of the inserted text
+  range.setStartAfter(textNode);
+  range.setEndAfter(textNode);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  
+  // Trigger an input event to update the model and history
+  handleEditorInput();
 };
 
 // Handle keydown events
