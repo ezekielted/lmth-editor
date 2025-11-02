@@ -3,7 +3,7 @@
     <div class="app-header">
       <div class="app-title-container">
         <h1 class="app-title">
-          <button @click="shiftLeft" class="bracket-button" aria-label="Shift letters left">&lt;</button>
+          <button @click="toggleLogo" class="bracket-button" aria-label="Toggle logo state">&lt;</button>
           
           <TransitionGroup name="logo" tag="div" class="logo-letters">
             <span 
@@ -15,7 +15,7 @@
             </span>
           </TransitionGroup>
 
-          <button @click="shiftRight" class="bracket-button" aria-label="Shift letters right">&gt;</button>
+          <button @click="toggleLogo" class="bracket-button" aria-label="Toggle logo state">&gt;</button>
         </h1>
         <p class="app-description">Code & Render in Sync</p>
       </div>
@@ -190,7 +190,7 @@ import {
   LinkIcon
 } from 'lucide-vue-next';
 
-// --- NEW: Logo state ---
+// --- Logo state ---
 const logoLetters = ref(['l', 'm', 't', 'h']);
 
 const editorRef = ref(null);
@@ -257,36 +257,32 @@ const codeWidth = ref('50%');
 const editorHeight = ref('50%');
 const codeHeight = ref('50%');
 
-// --- UPDATED: Logo movement functions ---
-const shiftRight = () => {
+// --- UPDATED: Logo Toggling Logic ---
+const toggleLogo = () => {
   const currentState = logoLetters.value.join('');
-
-  // From the final state 'html', loop back to the start 'lmth'
-  if (currentState === 'html') {
-    logoLetters.value = ['l', 'm', 't', 'h'];
-  // From the state just before the end, go to 'html'
-  } else if (currentState === 'mthl') {
+  if (currentState === 'lmth') {
     logoLetters.value = ['h', 't', 'm', 'l'];
-  // Otherwise, perform a normal circular shift to the right
   } else {
-    const last = logoLetters.value.pop();
-    logoLetters.value.unshift(last);
+    logoLetters.value = ['l', 'm', 't', 'h'];
   }
 };
 
-const shiftLeft = () => {
-  const currentState = logoLetters.value.join('');
-  
-  // From the start 'lmth', go to the final state 'html'
-  if (currentState === 'lmth') {
-    logoLetters.value = ['h', 't', 'm', 'l'];
-  // From 'html', go to the previous state in the sequence
-  } else if (currentState === 'html') {
-    logoLetters.value = ['m', 't', 'h', 'l'];
-  // Otherwise, perform a normal circular shift to the left
-  } else {
-    const first = logoLetters.value.shift();
-    logoLetters.value.push(first);
+// Handle global keydown for logo transition
+const handleGlobalKeyDown = (event) => {
+  const activeEl = document.activeElement;
+  const isInputFocused = activeEl.tagName === 'INPUT' ||
+                         activeEl.tagName === 'TEXTAREA' ||
+                         activeEl.isContentEditable;
+
+  // Do not interfere with typing in inputs or the editor
+  if (isInputFocused) {
+    return;
+  }
+
+  // UPDATED: Use the toggle function for both arrow keys
+  if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+    event.preventDefault(); // Prevent page scrolling
+    toggleLogo();
   }
 };
 
@@ -294,14 +290,6 @@ const shiftLeft = () => {
 const closeImageReplaceMenu = () => {
   showImageReplaceMenu.value = false;
 };
-
-onMounted(() => {
-  document.addEventListener('click', closeImageReplaceMenu);
-});
-
-onUnmounted(() => {
-  document.removeEventListener('click', closeImageReplaceMenu);
-});
 
 // Toggle dark mode
 const toggleDarkMode = () => {
@@ -1324,8 +1312,11 @@ const checkScreenSize = () => {
   isMobileView.value = window.innerWidth <= 768;
 };
 
-// Initialize the editor
+// --- Consolidated Lifecycle Hooks ---
 onMounted(() => {
+  // Listener for closing image replace menu
+  document.addEventListener('click', closeImageReplaceMenu);
+
   // Check for saved dark mode preference
   const savedMode = localStorage.getItem('htmlEditorDarkMode');
   if (savedMode === 'dark') {
@@ -1335,7 +1326,7 @@ onMounted(() => {
   // Apply initial styles
   updateHtmlCodeStyles();
   
-  // Set initial HTML content
+  // Set initial HTML content and history
   if (editorRef.value) {
     editorRef.value.innerHTML = currentHtml.value;
     addToHistory(currentHtml.value);
@@ -1349,14 +1340,23 @@ onMounted(() => {
   // Initial highlighter content
   updateHighlighterContent(currentHtml.value);
 
-  // NEW: Add window resize listener to handle layout changes
+  // Add window resize listener to handle layout changes
   window.addEventListener('resize', checkScreenSize);
   checkScreenSize(); // Initial check on mount
+
+  // Add global keydown listener for logo control
+  window.addEventListener('keydown', handleGlobalKeyDown);
 });
 
-// NEW: Clean up the event listener on component unmount
 onUnmounted(() => {
+  // Cleanup listener for closing image replace menu
+  document.removeEventListener('click', closeImageReplaceMenu);
+
+  // Cleanup window resize listener
   window.removeEventListener('resize', checkScreenSize);
+
+  // Cleanup global keydown listener
+  window.removeEventListener('keydown', handleGlobalKeyDown);
 });
 </script>
 
