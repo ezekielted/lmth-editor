@@ -1361,8 +1361,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* --- REMOVED: Keyframe animations for jiggle --- */
-
 @keyframes fadeInScale {
   from {
     opacity: 0;
@@ -1385,7 +1383,7 @@ onUnmounted(() => {
   }
 }
 
-/* Base styles and variables */
+/* --- UPDATED: Base styles for light mode --- */
 .html-editor {
   --primary-color: #2d3748;
   --primary-hover: #1a202c;
@@ -1396,17 +1394,17 @@ onUnmounted(() => {
   --danger-hover: #c53030;
   --text-color: #1e293b;
   --text-secondary: #475569;
-  --bg-color: #ffffff;
-  --bg-secondary: #f8fafc;
-  --border-color: #e2e8f0;
+  --bg-color: #f1f5f9; /* Light snow background */
+  --bg-secondary: #e2e8f0; /* UPDATED: Darker snow for panels/toolbar */
+  --border-color: #d1d5db; /* Slightly darker for better contrast on the new bg */
   --shadow-color: rgba(45, 55, 72, 0.1);
   --shadow-hover-color: rgba(45, 55, 72, 0.2);
-  --scrollbar-bg: #f1f5f9;
+  --scrollbar-bg: #e2e8f0;
   --scrollbar-thumb: #94a3b8;
   --bracket-color: var(--text-color);
   --h-bg-color: #000000;
   --h-text-color: #ffffff;
-  --highlight-bg: #fde68a; /* Dull amber yellow */
+  --highlight-bg: #fde68a;
   --ruled-line-color: #d1d5db;
 
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -1434,13 +1432,6 @@ onUnmounted(() => {
 
 /* Dark mode styles */
 .html-editor.dark {
-  --primary-color: #1a202c;
-  --primary-hover: #0f172a;
-  --primary-focus-glow: rgba(148, 163, 184, 0.4);
-  --secondary-color: #4a5568;
-  --secondary-hover: #2d3748;
-  --danger-color: #f87171;
-  --danger-hover: #ef4444;
   --text-color: #f1f5f9;
   --text-secondary: #cbd5e1;
   --bg-color: #0f172a;
@@ -1450,10 +1441,6 @@ onUnmounted(() => {
   --shadow-hover-color: rgba(0, 0, 0, 0.4);
   --scrollbar-bg: #1e293b;
   --scrollbar-thumb: #64748b;
-  --bracket-color: var(--text-color);
-  --h-bg-color: #ffffff;
-  --h-text-color: #000000;
-  --highlight-bg: #fBBF2480;
   --ruled-line-color: #475569;
 }
 
@@ -1496,23 +1483,6 @@ onUnmounted(() => {
   position: relative;
 }
 
-.bracket-button {
-  background: none;
-  border: none;
-  padding: 0 5px;
-  font-family: inherit;
-  font-size: inherit;
-  font-weight: 500;
-  color: var(--bracket-color);
-  cursor: pointer;
-  border-radius: 4px;
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-.bracket-button:hover {
-  opacity: 0.7;
-  transform: scale(1.1);
-}
-
 /* --- Vue TransitionGroup styles for the logo --- */
 .logo-move,
 .logo-enter-active,
@@ -1549,29 +1519,6 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 
-.theme-toggle {
-  background: none;
-  border: none;
-  color: var(--text-color);
-  cursor: pointer;
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
-.theme-toggle:hover {
-  background-color: var(--bg-secondary);
-  transform: scale(1.1) rotate(15deg);
-  /* REMOVED: animation: jiggle 0.4s; */
-}
-
 /* Toolbar */
 .toolbar {
   display: flex;
@@ -1594,25 +1541,32 @@ onUnmounted(() => {
   align-items: center;
 }
 
-/* Buttons */
+/* --- Glass UI Buttons with Enhanced Shadow --- */
 .btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: 6px;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 99px; /* Ellipse shape */
   font-weight: 500;
   font-size: 0.85rem;
   cursor: pointer;
-  border: none;
   white-space: nowrap;
   transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
-  box-shadow: 0 1px 3px var(--shadow-color);
+  
+  /* Glass Effect */
+  background-color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  
+  color: var(--text-color);
+  box-shadow: 0 4px 12px var(--shadow-color); /* Enhanced Shadow */
 }
 
 @media (max-width: 480px) {
   .btn {
-    padding: 6px 10px;
+    padding: 6px 12px;
     font-size: 0.8rem;
   }
   
@@ -1624,47 +1578,101 @@ onUnmounted(() => {
 
 .btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px var(--shadow-hover-color);
-  /* REMOVED: animation: jiggle 0.4s; */
+  box-shadow: 0 6px 16px var(--shadow-hover-color); /* Enhanced Hover Shadow */
+  background-color: rgba(255, 255, 255, 0.8); /* Brighter on hover */
 }
 
 .btn:active:not(:disabled) {
   transform: translateY(0px);
-  box-shadow: 0 1px 3px var(--shadow-color);
+  box-shadow: 0 4px 12px var(--shadow-color);
 }
 
-.btn-primary {
-  background-color: var(--primary-color);
-  color: white;
-}
-.btn-primary:hover:not(:disabled) {
-  background-color: var(--primary-hover);
-}
-
-.btn-secondary {
-  background-color: var(--secondary-color);
-  color: white;
-}
-.btn-secondary:hover:not(:disabled) {
-  background-color: var(--secondary-hover);
-}
-
-.btn-danger {
-  background-color: var(--danger-color);
-  color: white;
-}
-.btn-danger:hover:not(:disabled) {
-  background-color: var(--danger-hover);
+.btn-primary, .btn-secondary, .btn-danger {
+  background-color: transparent;
 }
 
 .btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
 
 .hidden {
   display: none;
 }
+
+/* Reverted Bracket Button Style */
+.bracket-button {
+  background: none;
+  border: none;
+  padding: 0 5px;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 500;
+  color: var(--bracket-color);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.bracket-button:hover {
+  opacity: 0.7;
+  transform: scale(1.1);
+}
+
+
+/* Glass UI for Theme and Bubble Buttons with Enhanced Shadow */
+.theme-toggle, .bubble-btn {
+  background-color: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  border-radius: 99px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px var(--shadow-color); /* Enhanced Shadow */
+}
+
+.theme-toggle {
+  width: 44px;
+  height: 44px;
+  color: var(--text-color);
+  margin-left: auto;
+}
+
+.theme-toggle:hover, .bubble-btn:hover {
+  background-color: rgba(255, 255, 255, 0.6);
+  border-color: rgba(255, 255, 255, 0.7);
+  transform: scale(1.1) translateY(-1px);
+  box-shadow: 0 6px 16px var(--shadow-hover-color); /* Enhanced Hover Shadow */
+}
+
+/* Dark Mode Button Adjustments */
+.html-editor.dark .btn {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.html-editor.dark .btn:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.html-editor.dark .theme-toggle,
+.html-editor.dark .bubble-btn {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.html-editor.dark .theme-toggle:hover,
+.html-editor.dark .bubble-btn:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
 
 /* Main content layout */
 .main-content {
@@ -1719,7 +1727,7 @@ onUnmounted(() => {
   position: relative;
   flex-grow: 1;
   overflow: auto;
-  background-color: white;
+  background-color: white; /* Visual editor area should remain white for readability */
   transition: border-color 0.4s ease;
 }
 
@@ -1838,9 +1846,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Let CSS handle the centering on the `left` and `top` coordinates */
   transform: translate(-50%, -50%);
-  /* Add a subtle transition for smoother positioning */
   transition: top 0.05s linear, left 0.05s linear;
 }
 
@@ -1891,23 +1897,11 @@ onUnmounted(() => {
 }
 
 .bubble-btn {
-  background-color: var(--primary-color);
-  color: white;
-  border: none;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 2px 5px var(--shadow-color);
-  transition: all 0.2s ease;
+  width: 40px;
+  height: 40px;
+  color: var(--text-color);
 }
-.bubble-btn:hover {
-  background-color: var(--primary-hover);
-  transform: scale(1.1);
-}
+
 
 /* Modal */
 .image-modal {
@@ -1924,7 +1918,7 @@ onUnmounted(() => {
 }
 
 .modal-content {
-  background-color: var(--bg-color);
+  background-color: #ffffff; /* Modal should be white */
   padding: 20px;
   border-radius: 12px;
   width: 90%;
@@ -1946,7 +1940,7 @@ onUnmounted(() => {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   margin-bottom: 15px;
-  background-color: var(--bg-secondary);
+  background-color: #f1f5f9; /* A very light grey for inputs */
   color: var(--text-color);
   font-size: 0.95rem;
   transition: all 0.3s ease;
