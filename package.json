@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "core-js": "^3.8.3",
+    "js-beautify": "^1.15.4",
     "lucide-vue-next": "^0.477.0",
     "vue": "^3.2.13"
   },

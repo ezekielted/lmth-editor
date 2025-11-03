@@ -190,6 +190,9 @@ import {
   LinkIcon
 } from 'lucide-vue-next';
 
+// FIXED: Use js-beautify for tolerant HTML formatting
+import { html as beautifyHtml } from 'js-beautify';
+
 // --- Logo state ---
 const logoLetters = ref(['l', 'm', 't', 'h']);
 
@@ -256,6 +259,19 @@ const codeWidth = ref('50%');
 // Vertical (mobile) sizing
 const editorHeight = ref('50%');
 const codeHeight = ref('50%');
+
+// --- FIXED: Use js-beautify for formatting (tolerant to invalid HTML)
+const formatHtml = (raw) => {
+  return beautifyHtml(raw, {
+    indent_size: 2,
+    preserve_newlines: true,
+    max_preserve_newlines: 2,
+    indent_inner_html: true,
+    extra_liners: [],
+    wrap_line_length: 80,
+    unformatted: ['script', 'style'], // Preserve <script> and <style> content
+  });
+};
 
 // --- UPDATED: Logo Toggling Logic ---
 const toggleLogo = () => {
@@ -368,7 +384,9 @@ const handleFileUpload = (event) => {
 
   const reader = new FileReader();
   reader.onload = (e) => {
-    setHtml(e.target.result);
+    const rawHtml = e.target.result;
+    const prettyHtml = formatHtml(rawHtml);
+    setHtml(prettyHtml);
   };
   reader.readAsText(file);
 };
@@ -1055,7 +1073,7 @@ const getHighlightInfoForElement = (element) => {
 /**
  * --- UPDATED ---
  * Renders the HTML content with a highlighted section. It now prioritizes
- * the persistent highlight and falls back to the temporary hover highlight.
+ * the persistent highlight over the temporary hover highlight.
  * @param {string} content The HTML string to render.
  * @param {object|null} hoverHighlightInfo Info for a temporary hover highlight.
  */
