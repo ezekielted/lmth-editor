@@ -518,10 +518,6 @@ const handleTextSelection = () => {
   hasTextSelection.value = true;
   saveSelection();
   
-  // Save the current scroll position (for potential future use)
-  // eslint-disable-next-line no-unused-vars
-  const scrollPosition = saveEditorScrollPosition();
-  
   // Position the link bubble near the selection
   const range = selection.getRangeAt(0);
   const rect = range.getBoundingClientRect();
@@ -1685,6 +1681,11 @@ onUnmounted(() => {
   border-color: rgba(255, 255, 255, 0.15);
 }
 
+/* FIXED: Make bubble button icon dark in dark mode to be visible on white editor */
+.html-editor.dark .bubble-btn {
+  color: #1e293b;
+}
+
 .html-editor.dark .theme-toggle:hover,
 .html-editor.dark .bubble-btn:hover {
   background-color: rgba(255, 255, 255, 0.12);
@@ -1845,6 +1846,11 @@ onUnmounted(() => {
   border-radius: 3px;
   color: var(--text-color);
   transition: background-color 0.3s ease;
+}
+
+/* FIXED: Make highlighted text dark for visibility in dark mode */
+.html-editor.dark .code-highlighter :deep(.highlight) {
+  color: #1e293b;
 }
 
 /* --- OPTIMIZED: Magnifier styles --- */
