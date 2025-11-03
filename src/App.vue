@@ -61,7 +61,7 @@
       </div>
     </div>
 
-    <div class="main-content" ref="mainContentRef">
+    <div class="main-content" ref="mainContentRef" :class="{ 'swapped': isSwapped }">
       <div class="panel editor-panel" :style="isMobileView ? { height: editorHeight } : { width: editorWidth }">
         <div class="panel-header">
           <h2 class="panel-title">Visual Editor</h2>
@@ -195,6 +195,7 @@ import { html as beautifyHtml } from 'js-beautify';
 
 // --- Logo state ---
 const logoLetters = ref(['l', 'm', 't', 'h']);
+const isSwapped = ref(false);
 
 const editorRef = ref(null);
 const htmlOutputRef = ref(null);
@@ -278,8 +279,10 @@ const toggleLogo = () => {
   const currentState = logoLetters.value.join('');
   if (currentState === 'lmth') {
     logoLetters.value = ['h', 't', 'm', 'l'];
+    isSwapped.value = true;
   } else {
     logoLetters.value = ['l', 'm', 't', 'h'];
+    isSwapped.value = false;
   }
 };
 
@@ -1292,24 +1295,34 @@ const resize = (event) => {
   if (isMobileView.value) {
     // Vertical resizing logic
     const { top, height } = mainContent.getBoundingClientRect();
-    const newEditorHeight = event.clientY - top;
-    const newCodeHeight = height - newEditorHeight;
+    const newTopHeight = event.clientY - top;
+    const newBottomHeight = height - newTopHeight;
 
     // Set minimum height for panels
-    if (newEditorHeight > 100 && newCodeHeight > 100) {
-      editorHeight.value = `${newEditorHeight}px`;
-      codeHeight.value = `${newCodeHeight}px`;
+    if (newTopHeight > 100 && newBottomHeight > 100) {
+      if (!isSwapped.value) {
+        editorHeight.value = `${newTopHeight}px`;
+        codeHeight.value = `${newBottomHeight}px`;
+      } else {
+        codeHeight.value = `${newTopHeight}px`;
+        editorHeight.value = `${newBottomHeight}px`;
+      }
     }
   } else {
     // Horizontal resizing logic (original)
     const { left, width } = mainContent.getBoundingClientRect();
-    const newEditorWidth = event.clientX - left;
-    const newCodeWidth = width - newEditorWidth;
+    const newLeftWidth = event.clientX - left;
+    const newRightWidth = width - newLeftWidth;
 
     // Set minimum width for panels
-    if (newEditorWidth > 100 && newCodeWidth > 100) {
-      editorWidth.value = `${newEditorWidth}px`;
-      codeWidth.value = `${newCodeWidth}px`;
+    if (newLeftWidth > 100 && newRightWidth > 100) {
+      if (!isSwapped.value) {
+        editorWidth.value = `${newLeftWidth}px`;
+        codeWidth.value = `${newRightWidth}px`;
+      } else {
+        codeWidth.value = `${newLeftWidth}px`;
+        editorWidth.value = `${newRightWidth}px`;
+      }
     }
   }
 };
@@ -1702,6 +1715,10 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
+.main-content.swapped {
+  flex-direction: row-reverse;
+}
+
 .panel {
   background-color: var(--bg-secondary);
   border-radius: 8px;
@@ -1716,6 +1733,10 @@ onUnmounted(() => {
   .main-content {
     flex-direction: column;
     padding: 10px;
+  }
+
+  .main-content.swapped {
+    flex-direction: column-reverse;
   }
 
   .panel {
